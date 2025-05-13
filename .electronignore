@@ -1,0 +1,9 @@
+node_modules/.cache
+dist
+build
+*.log
+*.zip
+*.7z
+*.iso
+src/
+test/

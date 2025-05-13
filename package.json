@@ -1,0 +1,43 @@
+{
+  "name": "batch-games-converter",
+  "version": "3.0",
+  "description": "B2PC by RetroGameSets.fr",
+  "main": "main.js",
+  "author": "RetroGameSets.fr",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:css": "node_modules\\.bin\\tailwindcss.cmd -i ressources/style.css -o ressources/style.css --minify"
+  },
+  "dependencies": {
+    "@electron/remote": "^2.0.8",
+    "electron": "^22.0.0",
+    "node-7z": "^3.0.0"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "electron-builder": "^24.13.3",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.4.1"
+  },
+  "build": {
+    "appId": "fr.retrogamesets.B2PC",
+    "productName": "B2PC - Batch Games Converter",
+    "files": [
+      "**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "ressources/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
