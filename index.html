@@ -7,6 +7,48 @@
     <title>Batch Games Converter by RetroGameSets.fr</title>
     <link rel="stylesheet" href="ressources/style.css">
     <link rel="icon" href="ressources/icon.ico">
+    <style>
+        .tab-button {
+            padding: 8px 16px;
+            margin-right: 1rem;
+            font-size: 14px;
+            cursor: pointer;
+            color: #6b7280;
+            border-bottom: 2px solid transparent;
+        }
+        .tab-button.active {
+            border-bottom: 2px solid #3b82f6;
+            color: #3b82f6;
+        }
+        .tab-button:hover {
+            color: #4b5563;
+            border-bottom: 2px solid #d1d5db;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .btn-purple {
+            background-color: #a855f7;
+            color: #fff;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+        }
+        .btn-purple:hover {
+            background-color: #9333ea;
+        }
+        .btn-orange {
+            background-color: #f97316;
+            color: #fff;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+        }
+        .btn-orange:hover {
+            background-color: #ea580c;
+        }
+    </style>
 </head>
 <body class="bg-gray-100 font-sans">
     <div class="container mx-auto p-4">
@@ -43,7 +85,7 @@
         <!-- Onglets -->
         <div class="border-b border-gray-200">
             <nav class="-mb-px flex gap-4 justify-center" aria-label="Tabs">
-                <button id="tab-conversion" class="tab-button border-b-2 border-blue-500 text-blue-600 px-4 py-2 font-medium text-sm">Conversion</button>
+                <button id="tab-conversion" class="tab-button border-b-2 border-blue-500 text-blue-600 px-4 py-2 font-medium text-sm active">Conversion</button>
                 <button id="tab-compression" class="tab-button border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 px-4 py-2 font-medium text-sm">Compression / Décompression</button>
                 <button id="tab-patch" class="tab-button border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 px-4 py-2 font-medium text-sm">Patch</button>
             </nav>
@@ -52,43 +94,34 @@
         <!-- Contenu des onglets -->
         <div id="tab-content" class="mt-4">
             <!-- Onglet Conversion -->
-            <div id="content-conversion" class="tab-content">
+            <div id="content-conversion" class="tab-content active">
                 <div class="grid grid-cols-2 gap-4">
                     <button id="mergeBinCue" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600" title="Fusionner Multiples .bin en 1">Merge BIN/CUE</button>
-                 
                     <button id="convertToPbp" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600" title="Convertir un jeu psx bin/cue en pbp">PS1 to PBP EBOOT</button>
-                  
                     <button id="convertToChdv5" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600" title="Convertir un jeu bin/cue,gdi/iso en CHDv5">CUE/GDI/ISO to CHD v5</button>
-                  
                     <button id="extractChdToBin" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600" title="Extraire un CHD vers bin/cue">Extract CHD to BIN/CUE</button>
-                  
                     <button id="convertWiiToWbfs" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600" title="Compresser ISO WII en WBFS">Wii ISO to WBFS</button>
-                  
                 </div>
             </div>
             <!-- Onglet Compression / Décompression -->
             <div id="content-compression" class="tab-content hidden">
                 <div class="grid grid-cols-2 gap-4">
-                    <button id="zipAllRoms" class="bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600" title="Compresser tous les fichiers d'un repertoire dans des zip">ZIP all ROMS</button>
-                  
+                    <button id="zipAllRoms" class="bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 btn-purple" title="Compresser tous les fichiers d'un repertoire dans des zip">ZIP all ROMS</button>
                     <button disabled class="bg-gray-300 text-gray-500 px-4 py-2 rounded-lg">Décompresser (bientôt disponible)</button>
-                  
                 </div>
             </div>
             <!-- Onglet Patch -->
             <div id="content-patch" class="tab-content hidden">
                 <div class="grid grid-cols-2 gap-4">
-                    <button id="patchXboxIso" class="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600" title="Patch XBOX CLASSIC ISO pour les faire reconnaitre sur xemu">Patch XBOX ISO xemu</button>
-                  
+                    <button id="patchXboxIso" class="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 btn-orange" title="Patch XBOX CLASSIC ISO pour les faire reconnaitre sur xemu" disabled>Patch XBOX ISO xemu</button>
                     <button disabled class="bg-gray-300 text-gray-500 px-4 py-2 rounded-lg">Autres patches (bientôt disponible)</button>
-                  
                 </div>
             </div>
         </div>
 
         <!-- Footer -->
         <div class="text-center mt-8">
-            <p>RetroGameSets 202 // Version 3.0 // <a href="Lisez-moi.txt" class="text-blue-500 hover:underline">AIDE - INSTRUCTIONS</a></p>
+            <p>RetroGameSets 2023 // Version 3.0 // <a href="Lisez-moi.txt" class="text-blue-500 hover:underline">AIDE - INSTRUCTIONS</a></p>
         </div>
 
         <!-- Log Window (Modal) -->

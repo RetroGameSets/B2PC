@@ -6,7 +6,15 @@ const fs = require('fs').promises;
 
 contextBridge.exposeInMainWorld('electronAPI', {
     // Fonctions principales
-    patchXboxIso: (source, dest) => ipcRenderer.invoke('patch-xbox-iso', source, dest),
+    patchXboxIso: async (source, dest) => {
+        if (!await fs.access(source).then(() => true).catch(() => false)) {
+            throw new Error(`Dossier source n'existe pas : ${source}`);
+        }
+        if (!await fs.access(dest).then(() => true).catch(() => false)) {
+            throw new Error(`Dossier destination n'existe pas : ${dest}`);
+        }
+        return ipcRenderer.invoke('patch-xbox-iso', source, dest);
+    },
     onLogMessage: (callback) => ipcRenderer.on('log-message', (_, msg) => callback(msg)),
     onProgressUpdate: (callback) => ipcRenderer.on('progress-update', (_, data) => callback(data)),
 

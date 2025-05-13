@@ -65,6 +65,10 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
         sendLog(`Dossier source: ${source}`);
         sendLog(`Dossier destination: ${destination}`);
 
+        // Vérifier et créer le dossier destination\xbox
+        await fs.mkdir(destination, { recursive: true });
+        sendLog(`Dossier destination créé ou existant: ${destination}`);
+
         const archiveExtensions = ['.7z', '.zip', '.gz', '.rar'];
         const sourceFiles = await fs.readdir(source, { recursive: true });
         const archives = sourceFiles.filter(f => archiveExtensions.includes(path.extname(f).toLowerCase()));
@@ -111,14 +115,14 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
 
         // Étape 2 : Extraction des archives valides
         const archivesToExtract = [];
-        const skippedArchives = []; // Garder une trace des archives ignorées
+        const skippedArchives = [];
         for (const file of validArchives) {
             const baseName = path.basename(file, path.extname(file));
             const isoPath = path.join(destination, `${baseName}.iso`);
             if (await fs.access(isoPath).then(() => true).catch(() => false)) {
                 skippedGames++;
                 sendLog(`${baseName}.iso existe déjà dans ${destination}, extraction ignorée.`);
-                skippedArchives.push(baseName); // Ajouter le nom de base à la liste des ignorés
+                skippedArchives.push(baseName);
             } else {
                 archivesToExtract.push(file);
             }
@@ -129,7 +133,6 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
             const fullPath = path.join(source, file);
             sendLog(`Extraction de ${file}...`);
 
-            // Envoyer la progression AVANT de commencer l'extraction
             const percent = ((i + 1) / archivesToExtract.length) * 100;
             sendProgress(percent, `Extraction de ${file}`, i + 1, archivesToExtract.length);
 
@@ -175,7 +178,6 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
             const fileName = path.basename(iso, '.iso');
             sendLog(`Conversion de ${fileName}...`);
 
-            // Envoyer la progression AVANT de commencer la conversion
             const percent = ((i + 1) / isosToConvert.length) * 100;
             sendProgress(percent, `Conversion de ${fileName}`, i + 1, isosToConvert.length);
 
@@ -202,7 +204,6 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
                     if (code === 0 && !hasError) {
                         convertedGames++;
                         sendLog(`Conversion de ${fileName} OK`);
-                        // Supprimer le fichier .iso.old après une conversion réussie
                         const isoOldPath = `${iso}.old`;
                         fs.unlink(isoOldPath).catch(err => {
                             sendLog(`Erreur lors de la suppression de ${isoOldPath}: ${err.message}`);

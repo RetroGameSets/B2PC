@@ -1,15 +1,9 @@
-// renderer.js
-
-// Générer un logFilePath unique au démarrage
 const logDir = 'C:\\Users\\Admin\\Desktop\\B2PC\\LOG';
 const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(/:/g, 'h');
 let logFilePath = `${logDir}/LOG-${timestamp}.txt`;
 
-// Gestion des boutons Parcourir
 document.getElementById('selectSourceFolder').addEventListener('click', selectSourceFolder);
 document.getElementById('selectDestinationFolder').addEventListener('click', selectDestinationFolder);
-
-// Gestion des boutons de conversion
 document.getElementById('mergeBinCue').addEventListener('click', mergeBinCue);
 document.getElementById('convertToPbp').addEventListener('click', convertToPbp);
 document.getElementById('convertToChdv5').addEventListener('click', convertToChdv5);
@@ -17,43 +11,71 @@ document.getElementById('extractChdToBin').addEventListener('click', extractChdT
 document.getElementById('convertWiiToWbfs').addEventListener('click', convertWiiToWbfs);
 document.getElementById('zipAllRoms').addEventListener('click', zipAllRoms);
 document.getElementById('patchXboxIso').addEventListener('click', patchXboxIso);
-
-// Gestion des boutons du modal
+document.getElementById('runUpdate').addEventListener('click', runUpdate);
 document.getElementById('openLogFolder').addEventListener('click', openLogFolder);
 document.getElementById('closeLogModal').addEventListener('click', closeLogModal);
 
-// Gestion des onglets
 const tabs = document.querySelectorAll('.tab-button');
 const tabContents = document.querySelectorAll('.tab-content');
 
-tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-        // Désactiver l'onglet actif
-        tabs.forEach(t => {
-            t.classList.remove('border-blue-500', 'text-blue-600');
-            t.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
-        });
-        tabContents.forEach(content => content.classList.add('hidden'));
-
-        // Activer l'onglet cliqué
-        tab.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
-        tab.classList.add('border-blue-500', 'text-blue-600');
-        document.getElementById(`content-${tab.id.replace('tab-', '')}`).classList.remove('hidden');
+function setActiveTab(tab) {
+    console.log(`Activation onglet: ${tab.id}`);
+    tabs.forEach(t => {
+        t.classList.remove('border-blue-500', 'text-blue-600', 'active');
+        t.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
     });
+    tabContents.forEach(content => {
+        content.classList.add('hidden');
+        content.classList.remove('active');
+    });
+    tab.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+    tab.classList.add('border-blue-500', 'text-blue-600', 'active');
+    const content = document.getElementById(`content-${tab.id.replace('tab-', '')}`);
+    content.classList.remove('hidden');
+    content.classList.add('active');
+}
+
+tabs.forEach(tab => {
+    tab.addEventListener('click', () => setActiveTab(tab));
 });
 
-// Fonctions de sélection
+window.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM chargé, tabs:', tabs.length);
+    const conversionTab = document.getElementById('tab-conversion');
+    if (conversionTab) {
+        setActiveTab(conversionTab);
+    } else {
+        console.error('Onglet tab-conversion non trouvé');
+    }
+    updatePatchButtonState();
+});
+
+function updatePatchButtonState() {
+    const source = document.getElementById('sourceFolder').value;
+    const destination = document.getElementById('destinationFolder').value;
+    const patchButton = document.getElementById('patchXboxIso');
+    patchButton.disabled = !(source && destination);
+}
+
+document.getElementById('sourceFolder').addEventListener('input', updatePatchButtonState);
+document.getElementById('destinationFolder').addEventListener('input', updatePatchButtonState);
+
 async function selectSourceFolder() {
     const folder = await window.electronAPI.selectSourceFolder();
-    if (folder) document.getElementById('sourceFolder').value = folder;
+    if (folder) {
+        document.getElementById('sourceFolder').value = folder;
+        updatePatchButtonState();
+    }
 }
 
 async function selectDestinationFolder() {
     const folder = await window.electronAPI.selectDestinationFolder();
-    if (folder) document.getElementById('destinationFolder').value = folder;
+    if (folder) {
+        document.getElementById('destinationFolder').value = folder;
+        updatePatchButtonState();
+    }
 }
 
-// Modal log
 function showLogModal(functionName) {
     document.getElementById('logModal').classList.remove('hidden');
     document.getElementById('logContent').innerHTML = '';
@@ -109,7 +131,6 @@ async function patchXboxIso() {
     }
 }
 
-// Conversions simples
 async function convertToPbp() { await simpleConversion('convertToPbp', 'Conversion en PBP'); }
 async function mergeBinCue() { await simpleConversion('mergeBinCue', 'Fusion BIN/CUE'); }
 async function convertToChdv5() { await simpleConversion('convertToChdv5', 'Conversion en CHDv5'); }
@@ -132,7 +153,18 @@ async function simpleConversion(actionName, modalTitle) {
     }
 }
 
-// Log temps réel
+async function runUpdate() {
+    showLogModal('Mise à jour');
+    try {
+        await window.electronAPI.runUpdate();
+        appendLog('Mise à jour terminée avec succès.');
+        updateProgress(100, 'Mise à jour terminée');
+    } catch (error) {
+        appendLog(`Erreur: ${error.message}`);
+        alert(`Erreur: ${error.message}`);
+    }
+}
+
 window.addEventListener('DOMContentLoaded', () => {
     window.electronAPI.onLogMessage((message) => {
         appendLog(message);
