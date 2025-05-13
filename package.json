@@ -8,7 +8,7 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
-    "build:css": "node_modules\\.bin\\tailwindcss.cmd -i ressources/style.css -o ressources/style.css --minify"
+    "build:css": "npx tailwindcss -i ./ressources/tailwind.css -o ./ressources/style.css --minify"
   },
   "dependencies": {
     "@electron/remote": "^2.0.8",

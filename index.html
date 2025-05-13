@@ -1,28 +1,24 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
     <title>Batch Games Converter by RetroGameSets.fr</title>
-   <link rel="stylesheet" href="ressources/style.css">
-	
-	<!-- 
-	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
-	<script src="https://cdn.tailwindcss.com"></script>
-	--> 
-	
+    <link rel="stylesheet" href="ressources/style.css">
     <link rel="icon" href="ressources/icon.ico">
 </head>
 <body class="bg-gray-100 font-sans">
     <div class="container mx-auto p-4">
         <!-- Header -->
-        <div class="text-center">
+        <div class="text-center mb-6">
             <img src="ressources/images/logo.png" alt="Logo" class="mx-auto mb-2">
             <h5 class="text-lg font-semibold">Conversion de jeux PS1 / PS2 / Dreamcast / PCEngineCD / SegaCD / Saturn / Xbox / Wii</h5>
+            <button id="runUpdate" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600" title="Mettre à jour l'application">Mettre à jour</button>
         </div>
 
-        <fieldset class="border border-gray-300 p-4 rounded-lg mt-4">
+        <!-- Champs source et destination -->
+        <fieldset class="border border-gray-300 p-4 rounded-lg mb-6">
             <div class="text-center">
                 <!-- Source Folder -->
                 <div class="mb-4">
@@ -41,42 +37,76 @@
                         <button id="selectDestinationFolder" class="ml-2 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">Parcourir ...</button>
                     </div>
                 </div>
-
-                <!-- Conversion Buttons -->
-                <div class="grid grid-cols-2 gap-4 mt-6">
-                    <button id="mergeBinCue" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600" title="Fusionner Multiples .bin en 1">Merge BIN/CUE</button>
-                    <button id="convertToPbp" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600" title="Convertir un jeu psx bin/cue en pbp">PS1 to PBP EBOOT</button>
-                    <button id="convertToChdv5" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600" title="Convertir un jeu bin/cue,gdi/iso en CHDv5">CUE/GDI/ISO to CHD v5</button>
-                    <button id="patchXboxIso" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600" title="Patch XBOX CLASSIC ISO pour les faire reconnaitre sur xemu">Patch XBOX ISO xemu</button>
-                    <button id="extractChdToBin" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600" title="Extraire un CHD vers bin/cue">Extract CHD to BIN/CUE</button>
-                    <button id="convertWiiToWbfs" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600" title="Compresser ISO WII en WBFS">Wii ISO to WBFS</button>
-                    <button id="zipAllRoms" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600" title="Compresser tous les fichiers d'un repertoire dans des zip">ZIP all ROMS</button>
-                    <button id="runUpdate" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600" title="Mettre à jour l'application">Update</button>
-                </div>
             </div>
         </fieldset>
 
+        <!-- Onglets -->
+        <div class="border-b border-gray-200">
+            <nav class="-mb-px flex gap-4 justify-center" aria-label="Tabs">
+                <button id="tab-conversion" class="tab-button border-b-2 border-blue-500 text-blue-600 px-4 py-2 font-medium text-sm">Conversion</button>
+                <button id="tab-compression" class="tab-button border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 px-4 py-2 font-medium text-sm">Compression / Décompression</button>
+                <button id="tab-patch" class="tab-button border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 px-4 py-2 font-medium text-sm">Patch</button>
+            </nav>
+        </div>
+
+        <!-- Contenu des onglets -->
+        <div id="tab-content" class="mt-4">
+            <!-- Onglet Conversion -->
+            <div id="content-conversion" class="tab-content">
+                <div class="grid grid-cols-2 gap-4">
+                    <button id="mergeBinCue" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600" title="Fusionner Multiples .bin en 1">Merge BIN/CUE</button>
+                 
+                    <button id="convertToPbp" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600" title="Convertir un jeu psx bin/cue en pbp">PS1 to PBP EBOOT</button>
+                  
+                    <button id="convertToChdv5" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600" title="Convertir un jeu bin/cue,gdi/iso en CHDv5">CUE/GDI/ISO to CHD v5</button>
+                  
+                    <button id="extractChdToBin" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600" title="Extraire un CHD vers bin/cue">Extract CHD to BIN/CUE</button>
+                  
+                    <button id="convertWiiToWbfs" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600" title="Compresser ISO WII en WBFS">Wii ISO to WBFS</button>
+                  
+                </div>
+            </div>
+            <!-- Onglet Compression / Décompression -->
+            <div id="content-compression" class="tab-content hidden">
+                <div class="grid grid-cols-2 gap-4">
+                    <button id="zipAllRoms" class="bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600" title="Compresser tous les fichiers d'un repertoire dans des zip">ZIP all ROMS</button>
+                  
+                    <button disabled class="bg-gray-300 text-gray-500 px-4 py-2 rounded-lg">Décompresser (bientôt disponible)</button>
+                  
+                </div>
+            </div>
+            <!-- Onglet Patch -->
+            <div id="content-patch" class="tab-content hidden">
+                <div class="grid grid-cols-2 gap-4">
+                    <button id="patchXboxIso" class="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600" title="Patch XBOX CLASSIC ISO pour les faire reconnaitre sur xemu">Patch XBOX ISO xemu</button>
+                  
+                    <button disabled class="bg-gray-300 text-gray-500 px-4 py-2 rounded-lg">Autres patches (bientôt disponible)</button>
+                  
+                </div>
+            </div>
+        </div>
+
         <!-- Footer -->
         <div class="text-center mt-8">
-            <p>RetroGameSets 2023 // Version 3.0 // <a href="Lisez-moi.txt" class="text-blue-500 hover:underline">AIDE - INSTRUCTIONS</a></p>
+            <p>RetroGameSets 202 // Version 3.0 // <a href="Lisez-moi.txt" class="text-blue-500 hover:underline">AIDE - INSTRUCTIONS</a></p>
         </div>
-    </div>
 
-    <!-- Log Window (Modal) -->
-    <div id="logModal" class="fixed inset-0 bg-gray-800 bg-opacity-50 hidden flex items-center justify-center">
-        <div class="bg-white p-4 rounded-lg w-1/2 max-h-[80vh] flex flex-col">
-            <h3 class="text-lg font-semibold mb-2">Journal des opérations</h3>
-            <div id="logContent" class="flex-1 overflow-y-auto border p-2 mb-4 bg-gray-50"></div>
-            <div class="mb-4">
-                <label class="block text-sm font-medium"><span id="progressLabel">Progression :</span></label>
-                <div class="w-full bg-gray-200 rounded-full h-4">
-                    <div id="progressBar" class="bg-blue-500 h-4 rounded-full" style="width: 0%"></div>
+        <!-- Log Window (Modal) -->
+        <div id="logModal" class="fixed inset-0 bg-gray-800 bg-opacity-50 hidden flex items-center justify-center">
+            <div class="bg-white p-4 rounded-lg w-1/2 max-h-[80vh] flex flex-col">
+                <h3 class="text-lg font-semibold mb-2">Journal des opérations</h3>
+                <div id="logContent" class="flex-1 overflow-y-auto p-2 mb-4 bg-gray-50"></div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium"><span id="progressLabel">Progression :</span></label>
+                    <div class="w-full bg-gray-200 rounded-full h-4">
+                        <div id="progressBar" class="bg-blue-500 h-4 rounded-full" style="width: 0%"></div>
+                    </div>
+                    <span id="progressText" class="text-sm">0%</span>
                 </div>
-                <span id="progressText" class="text-sm">0%</span>
-            </div>
-            <div class="flex justify-end space-x-2">
-                <button id="openLogFolder" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">Ouvrir dossier LOG</button>
-                <button id="closeLogModal" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">Fermer</button>
+                <div class="flex justify-end space-x-2">
+                    <button id="openLogFolder" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">Ouvrir dossier LOG</button>
+                    <button id="closeLogModal" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">Fermer</button>
+                </div>
             </div>
         </div>
     </div>
