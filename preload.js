@@ -15,6 +15,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
         }
         return ipcRenderer.invoke('patch-xbox-iso', source, dest);
     },
+    convertToChdv5: async (source, dest) => {
+        if (!await fs.access(source).then(() => true).catch(() => false)) {
+            throw new Error(`Dossier source n'existe pas : ${source}`);
+        }
+        if (!await fs.access(dest).then(() => true).catch(() => false)) {
+            throw new Error(`Dossier destination n'existe pas : ${dest}`);
+        }
+        return ipcRenderer.invoke('convert-to-chdv5', source, dest);
+    },
     onLogMessage: (callback) => ipcRenderer.on('log-message', (_, msg) => callback(msg)),
     onProgressUpdate: (callback) => ipcRenderer.on('progress-update', (_, data) => callback(data)),
 
@@ -61,7 +70,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         }
     },
 
-    // Exécution de script batch
+    // Exécution de script batch (gardé pour compatibilité future)
     runCommand: async (script, source, destination, message = '') => {
         if (!source || !destination) {
             throw new Error('Veuillez sélectionner les dossiers source et destination.');
@@ -77,15 +86,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
         });
     },
 
-    // Autres conversions simples
+    // Autres conversions simples (à convertir en JavaScript ultérieurement)
     convertToPbp: async (source, destination) =>
         await module.exports.runCommand('pbp_eboot.bat', source, destination, 'Attention, il se peut que certaines pistes audio soient perdues pendant la conversion'),
 
     mergeBinCue: async (source, destination) =>
         await module.exports.runCommand('merge_bin.bat', source, destination, 'Cette fonction rassemblera tous les .bin/.cue en un seul fichier'),
-
-    convertToChdv5: async (source, destination) =>
-        await module.exports.runCommand('chdv5.bat', source, destination, 'Attention, CHDv5 peut ne pas être compatible avec certains émulateurs'),
 
     extractChdToBin: async (source, destination) =>
         await module.exports.runCommand('chd_extract.bat', source, destination, 'Extraction de CHD vers bin/cue - résultats non garantis'),

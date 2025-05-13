@@ -65,7 +65,6 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
         sendLog(`Dossier source: ${source}`);
         sendLog(`Dossier destination: ${destination}`);
 
-        // Vérifier et créer le dossier destination\xbox
         await fs.mkdir(destination, { recursive: true });
         sendLog(`Dossier destination créé ou existant: ${destination}`);
 
@@ -77,7 +76,6 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
         sendLog(`Archives détectées : ${archives.length}`);
         sendLog(`ISOs détectés : ${sourceIsos.length}`);
 
-        // Étape 1 : Vérification des archives
         const validArchives = [];
         const sevenZipPath = path.join(__dirname, 'ressources', '7za.exe');
 
@@ -113,7 +111,6 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
 
         sendLog(`Archives valides : ${validArchives.length}`);
 
-        // Étape 2 : Extraction des archives valides
         const archivesToExtract = [];
         const skippedArchives = [];
         for (const file of validArchives) {
@@ -137,7 +134,7 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
             sendProgress(percent, `Extraction de ${file}`, i + 1, archivesToExtract.length);
 
             await new Promise((resolve, reject) => {
-                seven.extractFull(fullPath, destination, { $bin: sevenZipPath })
+                seven.extractFull(fullPath, source, { $bin: sevenZipPath })
                     .on('end', () => {
                         sendLog(`${file} extrait.`);
                         resolve();
@@ -150,10 +147,8 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
             });
         }
 
-        // Étape 3 : Conversion des ISOs
-        const destFiles = await fs.readdir(destination, { recursive: true });
-        const destIsos = destFiles.filter(f => path.extname(f).toLowerCase() === '.iso');
-        const allIsos = [...sourceIsos.map(f => path.join(source, f)), ...destIsos.map(f => path.join(destination, f))];
+        const sourceFilesAfterExtract = await fs.readdir(source, { recursive: true });
+        const allIsos = sourceFilesAfterExtract.filter(f => path.extname(f).toLowerCase() === '.iso').map(f => path.join(source, f));
 
         const isosToConvert = [];
         for (const iso of allIsos) {
@@ -161,7 +156,7 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
             const isoPath = path.join(destination, `${fileName}.iso`);
             if (skippedArchives.includes(fileName)) {
                 sendLog(`${fileName}.iso correspond à une archive ignorée, conversion ignorée.`);
-            } else if (await fs.access(isoPath).then(() => true).catch(() => false) && iso !== isoPath) {
+            } else if (await fs.access(isoPath).then(() => true).catch(() => false)) {
                 skippedGames++;
                 sendLog(`${fileName}.iso existe déjà dans ${destination}, conversion ignorée.`);
             } else {
@@ -208,6 +203,10 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
                         fs.unlink(isoOldPath).catch(err => {
                             sendLog(`Erreur lors de la suppression de ${isoOldPath}: ${err.message}`);
                         });
+                        // Supprimer le fichier ISO source après conversion
+                        fs.unlink(iso).catch(err => {
+                            sendLog(`Erreur lors de la suppression de ${iso}: ${err.message}`);
+                        });
                     } else {
                         errorCount++;
                         const errorMsg = hasError ? errorMessage : `Échec conversion ${fileName}, code ${code}`;
@@ -230,6 +229,210 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
 
         return {
             summary: { convertedGames, optimizedGames, ignoredArchives, skippedGames, errorCount, duration: durationMs }
+        };
+
+    } catch (error) {
+        errorCount++;
+        sendLog(`Erreur globale: ${error.message}`);
+        throw error;
+    }
+});
+
+ipcMain.handle('convert-to-chdv5', async (_, source, dest) => {
+    const startTime = Date.now();
+    const destination = dest.endsWith('\\') ? dest + 'CHD' : dest + '\\CHD';
+    let convertedGames = 0;
+    let skippedGames = 0;
+    let ignoredArchives = 0;
+    let errorCount = 0;
+
+    try {
+        sendLog('Début de la conversion en CHDv5...');
+        sendLog(`Dossier source: ${source}`);
+        sendLog(`Dossier destination: ${destination}`);
+
+        // Créer le dossier destination\CHD si nécessaire
+        await fs.mkdir(destination, { recursive: true });
+        sendLog(`Dossier destination créé ou existant: ${destination}`);
+
+        // Étape 1 : Détecter les archives et fichiers d'entrée
+        const archiveExtensions = ['.7z', '.zip', '.gz', '.rar'];
+        const inputExtensions = ['.iso', '.cue', '.gdi'];
+        const sourceFiles = await fs.readdir(source, { recursive: true });
+        const archives = sourceFiles.filter(f => archiveExtensions.includes(path.extname(f).toLowerCase()));
+        const sourceInputs = sourceFiles.filter(f => inputExtensions.includes(path.extname(f).toLowerCase()));
+
+        sendLog(`Archives détectées : ${archives.length}`);
+        sendLog(`Fichiers d'entrée détectés : ${sourceInputs.length}`);
+
+        // Étape 2 : Vérification des archives
+        const validArchives = [];
+        const sevenZipPath = path.join(__dirname, 'ressources', '7za.exe');
+
+        for (let i = 0; i < archives.length; i++) {
+            const file = archives[i];
+            const fullPath = path.join(source, file);
+            sendLog(`Vérification de ${file}...`);
+            let foundValidFile = false;
+            await new Promise((resolve) => {
+                const child = spawn(sevenZipPath, ['l', fullPath]);
+                let output = '';
+                child.stdout.on('data', data => output += data.toString('utf8'));
+                child.on('close', () => {
+                    sendLog(`Contenu de ${file} :\n${output}`);
+                    const lines = output.split(/\r?\n/);
+                    for (const line of lines) {
+                        if (/\.(iso|cue|gdi|bin)$/i.test(line)) {
+                            foundValidFile = true;
+                            validArchives.push(file);
+                            break;
+                        }
+                    }
+                    if (!foundValidFile) {
+                        ignoredArchives++;
+                        sendLog(`Pas de fichier .iso/.cue/.gdi/.bin dans ${file}, ignoré.`);
+                    }
+                    const percent = ((i + 1) / archives.length) * 100;
+                    sendProgress(percent, `Vérification de ${file}`, i + 1, archives.length);
+                    resolve();
+                });
+            });
+        }
+
+        sendLog(`Archives valides : ${validArchives.length}`);
+
+        // Étape 3 : Extraction des archives valides
+        const archivesToExtract = [];
+        const skippedArchives = [];
+        for (const file of validArchives) {
+            const baseName = path.basename(file, path.extname(file));
+            const outputPath = path.join(destination, `${baseName}.chd`);
+            if (await fs.access(outputPath).then(() => true).catch(() => false)) {
+                skippedGames++;
+                sendLog(`${baseName}.chd existe déjà dans ${destination}, extraction ignorée.`);
+                skippedArchives.push(baseName);
+            } else {
+                archivesToExtract.push(file);
+            }
+        }
+
+        for (let i = 0; i < archivesToExtract.length; i++) {
+            const file = archivesToExtract[i];
+            const fullPath = path.join(source, file);
+            sendLog(`Extraction de ${file}...`);
+
+            const percent = ((i + 1) / archivesToExtract.length) * 100;
+            sendProgress(percent, `Extraction de ${file}`, i + 1, archivesToExtract.length);
+
+            await new Promise((resolve, reject) => {
+                seven.extractFull(fullPath, source, { $bin: sevenZipPath })
+                    .on('end', () => {
+                        sendLog(`${file} extrait.`);
+                        resolve();
+                    })
+                    .on('error', err => {
+                        sendLog(`Erreur extraction ${file}: ${err.message}`);
+                        errorCount++;
+                        reject();
+                    });
+            });
+        }
+
+        // Étape 4 : Conversion des fichiers en CHD
+        const sourceFilesAfterExtract = await fs.readdir(source, { recursive: true });
+        const allInputs = sourceFilesAfterExtract.filter(f => inputExtensions.includes(path.extname(f).toLowerCase())).map(f => path.join(source, f));
+
+        const inputsToConvert = [];
+        for (const input of allInputs) {
+            const fileName = path.basename(input, path.extname(input));
+            const outputPath = path.join(destination, `${fileName}.chd`);
+            if (skippedArchives.includes(fileName)) {
+                sendLog(`${fileName}.chd correspond à une archive ignorée, conversion ignorée.`);
+            } else if (await fs.access(outputPath).then(() => true).catch(() => false)) {
+                skippedGames++;
+                sendLog(`${fileName}.chd existe déjà dans ${destination}, conversion ignorée.`);
+            } else {
+                inputsToConvert.push(input);
+            }
+        }
+
+        const chdmanPath = path.join(__dirname, 'ressources', 'chdman.exe');
+
+        for (let i = 0; i < inputsToConvert.length; i++) {
+            const file = inputsToConvert[i];
+            const inputPath = file;
+            const baseName = path.basename(file, path.extname(file));
+            const outputPath = path.join(destination, `${baseName}.chd`);
+
+            sendLog(`Conversion de ${baseName}...`);
+            const percent = ((i + 1) / inputsToConvert.length) * 100;
+            sendProgress(percent, `Conversion de ${baseName}`, i + 1, inputsToConvert.length);
+
+            let lastLine = '';
+            await new Promise((resolve, reject) => {
+                const child = spawn(chdmanPath, ['createcd', '-i', inputPath, '-o', outputPath]);
+                child.stdout.on('data', data => {
+                    const lines = data.toString().split('\n').filter(Boolean);
+                    for (const line of lines) {
+                        if (line.includes('Compression complete')) {
+                            lastLine = line;
+                        }
+                    }
+                });
+                child.stderr.on('data', data => {
+                    const lines = data.toString().split('\n').filter(Boolean);
+                    for (const line of lines) {
+                        if (line.toLowerCase().includes('error') || line.toLowerCase().includes('failed')) {
+                            sendLog(`chdman [${baseName}] Erreur: ${line}`);
+                        }
+                    }
+                });
+                child.on('close', code => {
+                    if (code === 0) {
+                        convertedGames++;
+                        if (lastLine) {
+                            sendLog(`chdman [${baseName}]: ${lastLine}`);
+                        }
+                        sendLog(`Conversion de ${baseName} OK`);
+                        // Supprimer les fichiers d'entrée après conversion
+                        const inputExt = path.extname(inputPath).toLowerCase();
+                        if (inputExt === '.cue' || inputExt === '.gdi') {
+                            const cueContent = fs.readFileSync(inputPath, 'utf8');
+                            const binFiles = cueContent.match(/FILE\s+"([^"]+\.bin)"/gi) || [];
+                            for (const bin of binFiles) {
+                                const binPath = path.join(path.dirname(inputPath), bin.match(/"([^"]+\.bin)"/)[1]);
+                                fs.unlink(binPath).catch(err => {
+                                    sendLog(`Erreur lors de la suppression de ${binPath}: ${err.message}`);
+                                });
+                            }
+                            fs.unlink(inputPath).catch(err => {
+                                sendLog(`Erreur lors de la suppression de ${inputPath}: ${err.message}`);
+                            });
+                        } else if (inputExt === '.iso') {
+                            fs.unlink(inputPath).catch(err => {
+                                sendLog(`Erreur lors de la suppression de ${inputPath}: ${err.message}`);
+                            });
+                        }
+                        resolve();
+                    } else {
+                        errorCount++;
+                        sendLog(`Échec conversion ${baseName}, code ${code}`);
+                        reject(new Error(`Échec conversion ${baseName}, code ${code}`));
+                    }
+                });
+            });
+        }
+
+        const durationMs = Date.now() - startTime;
+        sendLog('Résumé :');
+        sendLog(`- Jeux convertis : ${convertedGames}`);
+        sendLog(`- Jeux ignorés (déjà convertis) : ${skippedGames}`);
+        sendLog(`- Archives ignorées (sans fichier valide) : ${ignoredArchives}`);
+        sendLog(`- Erreurs : ${errorCount}`);
+        sendLog(`- Temps total : ${(durationMs / 60000).toFixed(1)}m`);
+
+        return {
+            summary: { convertedGames, skippedGames, ignoredArchives, errorCount, duration: durationMs }
         };
 
     } catch (error) {

@@ -47,24 +47,28 @@ window.addEventListener('DOMContentLoaded', () => {
     } else {
         console.error('Onglet tab-conversion non trouvé');
     }
-    updatePatchButtonState();
+    updateButtonStates();
 });
 
-function updatePatchButtonState() {
+function updateButtonStates() {
     const source = document.getElementById('sourceFolder').value;
     const destination = document.getElementById('destinationFolder').value;
     const patchButton = document.getElementById('patchXboxIso');
-    patchButton.disabled = !(source && destination);
+    const chdButton = document.getElementById('convertToChdv5');
+    const buttons = [patchButton, chdButton];
+    buttons.forEach(button => {
+        button.disabled = !(source && destination);
+    });
 }
 
-document.getElementById('sourceFolder').addEventListener('input', updatePatchButtonState);
-document.getElementById('destinationFolder').addEventListener('input', updatePatchButtonState);
+document.getElementById('sourceFolder').addEventListener('input', updateButtonStates);
+document.getElementById('destinationFolder').addEventListener('input', updateButtonStates);
 
 async function selectSourceFolder() {
     const folder = await window.electronAPI.selectSourceFolder();
     if (folder) {
         document.getElementById('sourceFolder').value = folder;
-        updatePatchButtonState();
+        updateButtonStates();
     }
 }
 
@@ -72,7 +76,7 @@ async function selectDestinationFolder() {
     const folder = await window.electronAPI.selectDestinationFolder();
     if (folder) {
         document.getElementById('destinationFolder').value = folder;
-        updatePatchButtonState();
+        updateButtonStates();
     }
 }
 
@@ -131,9 +135,29 @@ async function patchXboxIso() {
     }
 }
 
+async function convertToChdv5() {
+    const source = document.getElementById('sourceFolder').value;
+    const destination = document.getElementById('destinationFolder').value;
+    if (!source || !destination) return alert('Veuillez sélectionner les dossiers source et destination.');
+    alert('Attention, CHDv5 peut ne pas être compatible avec certains émulateurs');
+    showLogModal('Conversion en CHDv5');
+    try {
+        const result = await window.electronAPI.convertToChdv5(source, destination);
+        updateProgress(100, 'Conversion terminée');
+        const { convertedGames, skippedGames, errorCount } = result.summary;
+        if (errorCount > 0) {
+            alert(`Opération terminée avec ${errorCount} erreur(s). Consultez le journal pour plus de détails.`);
+        } else {
+            alert('Tous les jeux sont convertis, y\'a plus qu\'à jouer :D');
+        }
+    } catch (error) {
+        appendLog(`Erreur: ${error.message}`);
+        alert(`Erreur: ${error.message}`);
+    }
+}
+
 async function convertToPbp() { await simpleConversion('convertToPbp', 'Conversion en PBP'); }
 async function mergeBinCue() { await simpleConversion('mergeBinCue', 'Fusion BIN/CUE'); }
-async function convertToChdv5() { await simpleConversion('convertToChdv5', 'Conversion en CHDv5'); }
 async function extractChdToBin() { await simpleConversion('extractChdToBin', 'Extraction CHD vers BIN'); }
 async function convertWiiToWbfs() { await simpleConversion('convertWiiToWbfs', 'Conversion Wii en WBFS'); }
 async function zipAllRoms() { await simpleConversion('zipAllRoms', 'Compression des ROMs'); }
