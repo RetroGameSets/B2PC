@@ -1,30 +1,36 @@
 module.exports = {
   packagerConfig: {
     asar: true,
-	icon: "./icon.ico",
+    icon: "./icon.ico",
     extraResources: [
       { from: "ressources", to: "ressources" }
+    ],
+    ignore: [
+      "^/LOG/",
+      "^/out/",
+      "^/.*\\.log$"
     ]
   },
   makers: [
     {
-      name: "@electron-addons/electron-forge-maker-nsis",
+      name: "@felixrieseberg/electron-forge-maker-nsis",
       config: {
-        options: {
+        nsis: {
+          oneClick: false,
+          perMachine: true,
+          allowToChangeInstallationDirectory: true,
           installerIcon: "./icon.ico",
           uninstallerIcon: "./icon.ico",
           shortcutName: "B2PC",
           setupExeName: "B2PC-Setup.exe",
-          perMachine: true,
-          allowToChangeInstallationDirectory: true,
-          include: "./installer.nsi"
+          runAfterFinish: false
         }
       }
     },
     {
       name: "@electron-forge/maker-zip",
-      platforms: ["darwin", "win32", "linux"]
-    },
+      platforms: ["win32"]
+    }
   ],
   publishers: [
     {
