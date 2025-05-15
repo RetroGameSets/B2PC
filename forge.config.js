@@ -1,23 +1,23 @@
 module.exports = {
   packagerConfig: {
-    asar: true, // Compresse les fichiers en .asar pour optimiser
-    icon: "./ressources/icon", // Icône pour l'application (sans extension : .ico pour Windows, .icns pour macOS)
+    asar: true,
+    icon: "./ressources/icon",
     extraResources: [
-      { from: "ressources", to: "ressources" } // Inclut 7za.exe, chdman.exe, xiso.exe
+      { from: "ressources", to: "ressources" }
     ]
   },
   makers: [
     {
-    name: "@electron-addons/electron-forge-maker-nsis",
+      name: "@electron-addons/electron-forge-maker-nsis",
       config: {
         options: {
-          installerIcon: "./ressources/icon.ico", // Icône de l'installateur
-          uninstallerIcon: "./ressources/icon.ico", // Icône de désinstallation
-          shortcutName: "B2PC", // Nom du raccourci dans le menu Démarrer
-          setupExeName: "B2PC-Setup.exe", // Nom de l'installateur
-          perMachine: true, // Installation pour tous les utilisateurs
-          allowToChangeInstallationDirectory: true, // Permet de choisir le dossier d'installation
-          include: "./installer.nsi" // Script NSIS personnalisé (créé ci-dessous)
+          installerIcon: "./ressources/icon.ico",
+          uninstallerIcon: "./ressources/icon.ico",
+          shortcutName: "B2PC",
+          setupExeName: "B2PC-Setup.exe",
+          perMachine: true,
+          allowToChangeInstallationDirectory: true,
+          include: "./installer.nsi"
         }
       }
     },
@@ -49,7 +49,7 @@ module.exports = {
           owner: "RetroGameSets", // Remplace par ton nom d'utilisateur GitHub
           name: "B2PC"
         },
-        prerelease: false,
+        prerelease: true, // Marque comme pre-release (bêta)
         draft: true
       }
     }
