@@ -1,7 +1,7 @@
 module.exports = {
   packagerConfig: {
     asar: true,
-    icon: "./ressources/icon", // Sans extension (.ico pour Windows, .icns pour macOS)
+	icon: "./icon.ico",
     extraResources: [
       { from: "ressources", to: "ressources" }
     ]
@@ -11,8 +11,8 @@ module.exports = {
       name: "@electron-addons/electron-forge-maker-nsis",
       config: {
         options: {
-          installerIcon: "./ressources/icon.ico",
-          uninstallerIcon: "./ressources/icon.ico",
+          installerIcon: "./icon.ico",
+          uninstallerIcon: "./icon.ico",
           shortcutName: "B2PC",
           setupExeName: "B2PC-Setup.exe",
           perMachine: true,
@@ -25,21 +25,6 @@ module.exports = {
       name: "@electron-forge/maker-zip",
       platforms: ["darwin", "win32", "linux"]
     },
-    {
-      name: "@electron-forge/maker-deb",
-      config: {
-        options: {
-          maintainer: "RetroGameSets.fr",
-          homepage: "https://retrogamesets.fr"
-        }
-      }
-    },
-    {
-      name: "@electron-forge/maker-dmg",
-      config: {
-        format: "ULFO"
-      }
-    }
   ],
   publishers: [
     {
