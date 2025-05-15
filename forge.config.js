@@ -1,7 +1,7 @@
 module.exports = {
   packagerConfig: {
     asar: true,
-    icon: "file://C:/Users/Admin/Desktop/B2PC/ressources/icon.ico",
+    icon: "./ressources/icon.ico", // Chemin relatif pour l'application
     extraResources: [
       { from: "ressources", to: "ressources" }
     ]
@@ -11,8 +11,8 @@ module.exports = {
       name: "@electron-addons/electron-forge-maker-nsis",
       config: {
         options: {
-          installerIcon: "file://C:/Users/Admin/Desktop/B2PC/ressources/icon.ico",
-          uninstallerIcon: "file://C:/Users/Admin/Desktop/B2PC/ressources/icon.ico",
+          installerIcon: "./ressources/icon.ico", // Chemin relatif pour l'installateur
+          uninstallerIcon: "./ressources/icon.ico",
           shortcutName: "B2PC",
           setupExeName: "B2PC-Setup.exe",
           perMachine: true,
@@ -46,10 +46,10 @@ module.exports = {
       name: "@electron-forge/publisher-github",
       config: {
         repository: {
-          owner: "RetroGameSets", // Remplace par ton nom d'utilisateur GitHub
+          owner: "RetroGameSets",
           name: "B2PC"
         },
-        prerelease: true, // Marque comme pre-release (bêta)
+        prerelease: true,
         draft: true
       }
     }
