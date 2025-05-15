@@ -1,7 +1,7 @@
 module.exports = {
   packagerConfig: {
     asar: true,
-    icon: "./ressources/icon.ico",
+    icon: "./ressources/icon", // Sans extension (.ico pour Windows, .icns pour macOS)
     extraResources: [
       { from: "ressources", to: "ressources" }
     ]
