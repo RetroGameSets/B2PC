@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@electron/remote": "^2.0.8",
+    "electron-updater": "^6.6.2",
     "node-7z": "^3.0.0"
   },
   "devDependencies": {
