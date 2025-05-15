@@ -8,8 +8,6 @@
     "start": "electron-forge start",
     "build:css": "npx tailwindcss -i ./ressources/tailwind.css -o ./ressources/style.css --minify",
     "package": "electron-forge package",
-    "make": "electron-forge make",
-    "publish": "electron-forge publish",
     "build": "electron-builder build --win nsis"
   },
   "dependencies": {
@@ -18,10 +16,8 @@
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.8.1",
-    "@electron-forge/maker-zip": "^7.8.1",
     "@electron-forge/plugin-auto-unpack-natives": "^7.8.1",
     "@electron-forge/plugin-fuses": "^7.8.1",
-    "@electron-forge/publisher-github": "^7.8.1",
     "@electron/fuses": "^1.8.0",
     "autoprefixer": "^10.4.20",
     "electron": "^22.3.27",

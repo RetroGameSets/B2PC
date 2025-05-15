@@ -25,3 +25,8 @@ win:
     - target: nsis
       arch:
         - x64
+publish:
+  provider: github
+  owner: RetroGameSets
+  repo: B2PC
+  vPrefixedTagName: true
