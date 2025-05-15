@@ -1,7 +1,7 @@
 module.exports = {
   packagerConfig: {
     asar: true,
-    icon: "./ressources/icon",
+    icon: "file://C:/Users/Admin/Desktop/B2PC/ressources/icon.ico",
     extraResources: [
       { from: "ressources", to: "ressources" }
     ]
@@ -11,8 +11,8 @@ module.exports = {
       name: "@electron-addons/electron-forge-maker-nsis",
       config: {
         options: {
-          installerIcon: "./ressources/icon.ico",
-          uninstallerIcon: "./ressources/icon.ico",
+          installerIcon: "file://C:/Users/Admin/Desktop/B2PC/ressources/icon.ico",
+          uninstallerIcon: "file://C:/Users/Admin/Desktop/B2PC/ressources/icon.ico",
           shortcutName: "B2PC",
           setupExeName: "B2PC-Setup.exe",
           perMachine: true,

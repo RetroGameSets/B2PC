@@ -28,11 +28,6 @@
 ## Prérequis
 
 - **Système d’exploitation** : Windows (testé sur Windows 10/11).
-- **Node.js** : Version 16 ou supérieure.
-- **Dépendances** :
-  - `electron` pour l’interface de bureau.
-  - `node-7z` pour la gestion des archives.
-  - `tailwindcss` pour les styles.
 - **Outils inclus** :
   - `7za.exe` (gestion des archives).
   - `chdman.exe` (conversion en CHD).
