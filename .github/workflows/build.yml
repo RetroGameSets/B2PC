@@ -1,10 +1,8 @@
 name: Build and Publish B2PC
-
 on:
   push:
     tags:
       - 'v*.*.*'
-
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -14,37 +12,7 @@ jobs:
         with:
           node-version: 20
       - run: npm install
-      - run: npm run make -- --targets=@electron-addons/electron-forge-maker-nsis
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-      - run: npm run publish
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-
-  build-linux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npm install
-      - run: npm run make -- --targets=@electron-forge/maker-deb
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-      - run: npm run publish
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npm install
-      - run: npm run make -- --targets=@electron-forge/maker-dmg
+      - run: npm run build
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
       - run: npm run publish

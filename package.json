@@ -9,25 +9,23 @@
     "build:css": "npx tailwindcss -i ./ressources/tailwind.css -o ./ressources/style.css --minify",
     "package": "electron-forge package",
     "make": "electron-forge make",
-    "publish": "electron-forge publish"
+    "publish": "electron-forge publish",
+    "build": "electron-builder build --win nsis"
   },
   "dependencies": {
     "@electron/remote": "^2.0.8",
     "node-7z": "^3.0.0"
   },
   "devDependencies": {
-    "@electron-addons/electron-forge-maker-nsis": "^7.0.2",
     "@electron-forge/cli": "^7.8.1",
-    "@electron-forge/maker-deb": "^7.8.1",
-    "@electron-forge/maker-dmg": "^7.8.1",
-    "@electron-forge/maker-rpm": "^7.8.1",
     "@electron-forge/maker-zip": "^7.8.1",
-    "@electron-forge/publisher-github": "^7.8.1",
     "@electron-forge/plugin-auto-unpack-natives": "^7.8.1",
     "@electron-forge/plugin-fuses": "^7.8.1",
+    "@electron-forge/publisher-github": "^7.8.1",
     "@electron/fuses": "^1.8.0",
     "autoprefixer": "^10.4.20",
     "electron": "^22.3.27",
+    "electron-builder": "^26.0.12",
     "postcss": "^8.4.31",
     "tailwindcss": "^3.4.1"
   }
