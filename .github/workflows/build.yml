@@ -15,10 +15,13 @@ jobs:
       - run: npm run build -- --publish always
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-      - name: Mark release as pre-release and draft
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          files: out/make/B2PC-Setup-3.0.0-beta.3.exe
+          files: |
+            out/make/B2PC-Setup-3.0.0-beta.3.exe
+            out/make/B2PC-Setup-3.0.0-beta.3.exe.blockmap
+            out/make/latest.yml
           draft: true
           prerelease: true
           tag_name: v3.0.0-beta.3

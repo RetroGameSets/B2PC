@@ -30,3 +30,4 @@ publish:
   owner: RetroGameSets
   repo: B2PC
   vPrefixedTagName: true
+  publishAutoUpdate: true

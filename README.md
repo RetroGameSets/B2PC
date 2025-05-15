@@ -35,4 +35,4 @@
 - **Espace disque** : Prévoir de l’espace pour les fichiers extraits et convertis.
 
 ## Télécharger B2PC
-Téléchargez la version bêta 3.0.0-beta.1 pour Windows (installateur NSIS), macOS, ou Linux depuis [GitHub Releases](https://github.com/RetroGameSets/B2PC/releases).
+Téléchargez la version bêta  pour Windows depuis [GitHub Releases](https://github.com/RetroGameSets/B2PC/releases).
