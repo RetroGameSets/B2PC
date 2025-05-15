@@ -15,7 +15,6 @@ module.exports = {
           uninstallerIcon: "./ressources/icon.ico", // Icône de désinstallation
           shortcutName: "B2PC", // Nom du raccourci dans le menu Démarrer
           setupExeName: "B2PC-Setup.exe", // Nom de l'installateur
-          license: "./LICENSE", // Chemin vers le fichier de licence (optionnel)
           perMachine: true, // Installation pour tous les utilisateurs
           allowToChangeInstallationDirectory: true, // Permet de choisir le dossier d'installation
           include: "./installer.nsi" // Script NSIS personnalisé (créé ci-dessous)
@@ -47,7 +46,7 @@ module.exports = {
       name: "@electron-forge/publisher-github",
       config: {
         repository: {
-          owner: "tonUtilisateur", // Remplace par ton nom d'utilisateur GitHub
+          owner: "RetroGameSets", // Remplace par ton nom d'utilisateur GitHub
           name: "B2PC"
         },
         prerelease: false,
