@@ -1,3 +1,5 @@
 node_modules/
 LOG/
 ressources/style.css
+out/
+node_modules
