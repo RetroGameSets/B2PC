@@ -1,0 +1,4 @@
+provider: github
+owner: RetroGameSets
+repo: B2PC
+vPrefixedTagName: true
