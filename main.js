@@ -23,7 +23,9 @@ function createWindow() {
 
     enable(mainWindow.webContents);
     mainWindow.loadFile('index.html');
-    mainWindow.webContents.openDevTools();
+	
+	mainWindow.setMenu(null);
+   // mainWindow.webContents.openDevTools();
 }
 
 app.whenReady().then(() => {
