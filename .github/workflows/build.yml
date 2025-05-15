@@ -1,0 +1,52 @@
+name: Build and Publish B2PC
+
+on:
+  push:
+    tags:
+      - 'v*.*.*' # Inclut v3.0.0-beta.1, v3.0.0-beta.2, etc.
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run make -- --targets=@electron-addons/electron-forge-maker-nsis
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      - run: npm run publish
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run make -- --targets=@electron-forge/maker-deb
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      - run: npm run publish
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run make -- --targets=@electron-forge/maker-dmg
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      - run: npm run publish
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
