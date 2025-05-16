@@ -1,6 +1,8 @@
 ![Logo B2PC](ressources/images/logo.png)
 # Batch Games Converter (B2PC)
 
+![Screenshot](https://github.com/RetroGameSets/B2PC/blob/main/B2PC%20Home.png)
+
 **Batch Games Converter (B2PC)** est une application de bureau conçue pour simplifier la conversion et le traitement des ROMs de jeux rétro pour divers systèmes, notamment PS1, PS2, Dreamcast, PCEngineCD, SegaCD, Saturn, Xbox, et Wii. Développée par RetroGameSets.fr, B2PC vise à offrir une interface utilisateur intuitive pour automatiser des tâches comme la conversion de formats de fichiers et le patchage pour la compatibilité avec des émulateurs modernes.
 
 > **Note** : B2PC est en cours de développement actif. Seules certaines fonctionnalités sont actuellement disponibles, mais d'autres seront ajoutées à l'avenir.
