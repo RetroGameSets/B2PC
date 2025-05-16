@@ -40,7 +40,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const versionElement = document.querySelector('footer');
     if (versionElement) {
         const appVersion = window.electronAPI.getAppVersion();
-        versionElement.innerHTML = `RetroGameSets 2025 // Version ${appVersion} // <a href="#" class="text-blue-500">AIDE - INSTRUCTIONS</a>`;
+        versionElement.innerHTML = `RetroGameSets 2025 // Version ${appVersion}`;
     } else {
         console.error('Élément footer non trouvé');
     }

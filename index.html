@@ -6,27 +6,26 @@
     <title>B2PC</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
-<body class="bg-gray-100 flex flex-col min-h-screen">
-    <div class="container mx-auto flex-grow">
-	
-        <div class="text-center mb-10">
+<body class="bg-gray-100 flex flex-col min-h-screen justify-between">
+    <div class="mb-auto mx-10">
+        <div class="text-center mb-5">
             <img src="ressources/images/logo.png" alt="Logo" class="mx-auto mt-2">
-      <h5 class="text-gray-500 font-semibold italic">Conversion de jeux PS1 / PS2 / Dreamcast / PCEngineCD / SegaCD / Saturn / Xbox / Wii</h5>
-        <!-- <button id="runUpdate" class="bg-blue-500 text-white px-4 py-2 rounded">Mettre à jour</button> -->
+            <h5 class="text-gray-500 font-semibold italic">Conversion et compression de jeux automatisée</h5><br>
+			<h5 class="text-gray-500 italic">Compatible : PS1 / PS2 / Dreamcast / PCEngineCD / SegaCD / Saturn / Xbox / Wii</h5>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
             <div>
-                <label class="block text-lg font-semibold mb-2">Dossier source (Fichiers .zip/.7z/.gz/.rar/.cue/.gdi/.iso/.chd):</label>
+                <label class="block text-lg font-semibold mb-2">Dossier source :</label>
                 <div class="flex">
-                    <input type="text" id="sourceFolder" class="w-full p-2 border rounded" readonly>
+                    <input type="text" id="sourceFolder" class="w-full p-2 border rounded" readonly placeholder="ex: C:\Source">
                     <button id="selectSourceFolder" class="ml-2 bg-gray-500 text-white px-4 py-2 rounded">Parcourir</button>
                 </div>
             </div>
             <div>
-                <label class="block text-lg font-semibold mb-2">Dossier de destination des jeux convertis:</label>
+                <label class="block text-lg font-semibold mb-2">Dossier de destination :</label>
                 <div class="flex">
-                    <input type="text" id="destinationFolder" class="w-full p-2 border rounded" readonly>
+                    <input type="text" id="destinationFolder" class="w-full p-2 border rounded" readonly placeholder="ex: C:\Destination">
                     <button id="selectDestinationFolder" class="ml-2 bg-gray-500 text-white px-4 py-2 rounded">Parcourir</button>
                 </div>
             </div>
@@ -65,27 +64,28 @@
                     <h2 class="text-2xl font-bold mb-4">Journal des opérations</h2>
                     <div id="logContent" class="flex-grow overflow-y-auto mb-4 p-2 border border-gray-600" style="max-height: 60vh;"></div>
                     <div id="logs" class="hidden"></div>
+                    <div class="bg-gray-800 p-4 rounded shadow">
+                        <div class="flex justify-between items-center">
+                            <span class="text-lg font-semibold text-gray-300">Progression :</span>
+                            <div class="w-1/2 bg-gray-600 rounded-full h-4">
+                                <div id="progressBar" class="bg-blue-500 h-4 rounded-full" style="width: 0%"></div>
+                            </div>
+                            <span id="progressText" class="text-gray-300">0%</span>
+                        </div>
+                        <div id="progressLabel" class="text-center mt-2 text-gray-300"></div>
+                    </div>
                     <div class="flex justify-between">
                         <button id="openLogFolder" class="bg-blue-500 text-white px-4 py-2 rounded">Ouvrir dossier LOG</button>
                         <button id="closeLogModal" class="bg-red-500 text-white px-4 py-2 rounded">Fermer</button>
                     </div>
                 </div>
             </div>
-
-            <div class="bg-gray-800 p-4 rounded shadow">
-                <div class="flex justify-between items-center">
-                    <span class="text-lg font-semibold text-gray-300">Progression :</span>
-                    <div class="w-1/2 bg-gray-600 rounded-full h-4">
-                        <div id="progressBar" class="bg-blue-500 h-4 rounded-full" style="width: 0%"></div>
-                    </div>
-                    <span id="progressText" class="text-gray-300">0%</span>
-                </div>
-                <div id="progressLabel" class="text-center mt-2 text-gray-300"></div>
-            </div>
         </div>
-
-        <footer class="text-center text-gray-600 mt-auto mx-auto"></footer>
     </div>
+
+    <footer class="text-center text-gray-600 py-2 bg-gray-200 w-full">
+    </footer>
+
     <script src="renderer.js"></script>
 </body>
 </html>
