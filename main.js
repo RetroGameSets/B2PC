@@ -22,8 +22,8 @@ const resourcesPath = isPackaged
 
 function createWindow() {
     mainWindow = new BrowserWindow({
-        width: 1280,
-        height: 800,
+        width: 1024,
+        height: 720,
         resizable: true,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
@@ -344,7 +344,7 @@ ipcMain.handle('convert-to-chdv5', async (_, source, dest) => {
         sendLog('Début de la conversion en CHDv5...');
         sendLog(`Dossier source: ${source}`);
         sendLog(`Dossier destination: ${destination}`);
-       
+		const sevenZipPath = path.join(resourcesPath, '7za.exe');
         if (!fs.existsSync(sevenZipPath)) {
             sendLog(`Erreur : 7za.exe non trouvé à ${sevenZipPath}`);
             throw new Error(`7za.exe non trouvé à ${sevenZipPath}`);
