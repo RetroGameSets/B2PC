@@ -1,54 +1,52 @@
-const logDir = 'C:\\Users\\Admin\\Desktop\\B2PC\\LOG';
-const timestamp = new Date().toISOString().slice(0, 16).replace('T', '_').replace(/:/g, 'h');
+// renderer.js
+const logDir = window.electronAPI.getLogDir(); // Obtenir logDir depuis preload.js
+// Générer le timestamp en heure locale
+const now = new Date();
+const year = now.getFullYear();
+const month = String(now.getMonth() + 1).padStart(2, '0'); // Mois de 0 à 11, donc +1
+const day = String(now.getDate()).padStart(2, '0');
+const hours = String(now.getHours()).padStart(2, '0');
+const minutes = String(now.getMinutes()).padStart(2, '0');
+const timestamp = `${year}-${month}-${day}_${hours}h${minutes}`;
 let logFilePath = `${logDir}/LOG-${timestamp}.txt`;
 
 document.getElementById('selectSourceFolder').addEventListener('click', selectSourceFolder);
 document.getElementById('selectDestinationFolder').addEventListener('click', selectDestinationFolder);
-document.getElementById('mergeBinCue').addEventListener('click', mergeBinCue);
-document.getElementById('convertToPbp').addEventListener('click', convertToPbp);
 document.getElementById('convertToChdv5').addEventListener('click', convertToChdv5);
-document.getElementById('extractChdToBin').addEventListener('click', extractChdToBin);
-document.getElementById('convertWiiToWbfs').addEventListener('click', convertWiiToWbfs);
-document.getElementById('zipAllRoms').addEventListener('click', zipAllRoms);
 document.getElementById('patchXboxIso').addEventListener('click', patchXboxIso);
-document.getElementById('runUpdate').addEventListener('click', runUpdate);
 document.getElementById('openLogFolder').addEventListener('click', openLogFolder);
 document.getElementById('closeLogModal').addEventListener('click', closeLogModal);
 
-const tabs = document.querySelectorAll('.tab-button');
-const tabContents = document.querySelectorAll('.tab-content');
-
-function setActiveTab(tab) {
-    console.log(`Activation onglet: ${tab.id}`);
-    tabs.forEach(t => {
-        t.classList.remove('border-blue-500', 'text-blue-600', 'active');
-        t.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
-    });
-    tabContents.forEach(content => {
-        content.classList.add('hidden');
-        content.classList.remove('active');
-    });
-    tab.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
-    tab.classList.add('border-blue-500', 'text-blue-600', 'active');
-    const content = document.getElementById(`content-${tab.id.replace('tab-', '')}`);
-    content.classList.remove('hidden');
-    content.classList.add('active');
-}
-
-tabs.forEach(tab => {
-    tab.addEventListener('click', () => setActiveTab(tab));
-});
-
-window.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM chargé, tabs:', tabs.length);
-    const conversionTab = document.getElementById('tab-conversion');
-    if (conversionTab) {
-        setActiveTab(conversionTab);
+// Écouter les messages de log
+window.electronAPI.onLogMessage((message) => {
+    console.log('Log reçu dans renderer:', message); // Débogage
+    const logContent = document.getElementById('logContent');
+    if (logContent) {
+        logContent.innerHTML += `<p>${message}</p>`;
+        logContent.scrollTop = logContent.scrollHeight;
+        appendLog(message); // Appeler appendLog pour écrire dans le fichier
     } else {
-        console.error('Onglet tab-conversion non trouvé');
+        console.error('Élément logContent non trouvé');
     }
-    updateButtonStates();
 });
+
+// Écouter les mises à jour de progression
+window.electronAPI.onProgressUpdate(({ percent, message, current, total }) => {
+    updateProgress(percent, message, current, total);
+});
+
+// Mettre à jour la version dans le footer
+window.addEventListener('DOMContentLoaded', () => {
+    const versionElement = document.querySelector('footer');
+    if (versionElement) {
+        const appVersion = window.electronAPI.getAppVersion();
+        versionElement.innerHTML = `RetroGameSets 2025 // Version ${appVersion} // <a href="#" class="text-blue-500">AIDE - INSTRUCTIONS</a>`;
+    } else {
+        console.error('Élément footer non trouvé');
+    }
+});
+
+
 
 function updateButtonStates() {
     const source = document.getElementById('sourceFolder').value;
@@ -81,21 +79,42 @@ async function selectDestinationFolder() {
 }
 
 function showLogModal(functionName) {
-    document.getElementById('logModal').classList.remove('hidden');
-    document.getElementById('logContent').innerHTML = '';
-    updateProgress(0, 'Initialisation...');
+    const logModal = document.getElementById('logModal');
+    if (logModal) {
+        logModal.classList.remove('hidden');
+        const logContent = document.getElementById('logContent');
+        if (logContent) {
+            logContent.innerHTML = ''; // Réinitialiser le contenu
+        }
+        updateProgress(0, 'Initialisation...');
+    } else {
+        console.error('Modal logModal non trouvé');
+    }
 }
 
 function closeLogModal() {
-    document.getElementById('logModal').classList.add('hidden');
+    const logModal = document.getElementById('logModal');
+    if (logModal) {
+        logModal.classList.add('hidden');
+    } else {
+        console.error('Modal logModal non trouvé');
+    }
 }
 
 async function appendLog(message) {
     const logContent = document.getElementById('logContent');
-    logContent.innerHTML += `<p>${message}</p>`;
-    logContent.scrollTop = logContent.scrollHeight;
-    if (logFilePath) {
-        await window.electronAPI.writeLog(logFilePath, message).catch(console.error);
+    if (logContent) {
+        // Suppression de la mise à jour du DOM ici, car déjà fait dans onLogMessage
+        if (logFilePath) {
+            try {
+                await window.electronAPI.writeLog(logFilePath, message);
+                console.log('Log écrit dans:', logFilePath); // Débogage
+            } catch (err) {
+                console.error('Erreur écriture log:', err);
+            }
+        }
+    } else {
+        console.error('Élément logContent non trouvé');
     }
 }
 
@@ -103,15 +122,24 @@ function updateProgress(percentage, stepMessage = 'Progression :', currentStep =
     const progressBar = document.getElementById('progressBar');
     const progressText = document.getElementById('progressText');
     const progressLabel = document.getElementById('progressLabel');
-    percentage = Math.min(100, Math.max(0, percentage));
-    progressBar.style.width = `${percentage}%`;
-    progressText.textContent = `${Math.round(percentage)}%`;
-    progressLabel.textContent = totalSteps > 0 ? `${stepMessage} (${currentStep}/${totalSteps})` : stepMessage;
-    console.log(`Reçu progression: ${stepMessage} (${currentStep}/${totalSteps}) - ${percentage}%`);
+    if (progressBar && progressText && progressLabel) {
+        percentage = Math.min(100, Math.max(0, percentage));
+        progressBar.style.width = `${percentage}%`;
+        progressText.textContent = `${Math.round(percentage)}%`;
+        progressLabel.textContent = totalSteps > 0 ? `${stepMessage} (${currentStep}/${totalSteps})` : stepMessage;
+        console.log(`Reçu progression: ${stepMessage} (${currentStep}/${totalSteps}) - ${percentage}%`);
+    } else {
+        console.error('Un élément de progression est manquant');
+    }
 }
 
 async function openLogFolder() {
-    await window.electronAPI.openLogFolder().catch(console.error);
+    try {
+        await window.electronAPI.openLogFolder();
+        console.log('Dossier LOG ouvert');
+    } catch (err) {
+        console.error('Erreur ouverture dossier LOG:', err);
+    }
 }
 
 async function patchXboxIso() {
@@ -139,7 +167,6 @@ async function convertToChdv5() {
     const source = document.getElementById('sourceFolder').value;
     const destination = document.getElementById('destinationFolder').value;
     if (!source || !destination) return alert('Veuillez sélectionner les dossiers source et destination.');
-    alert('Attention, CHDv5 peut ne pas être compatible avec certains émulateurs');
     showLogModal('Conversion en CHDv5');
     try {
         const result = await window.electronAPI.convertToChdv5(source, destination);
@@ -155,12 +182,6 @@ async function convertToChdv5() {
         alert(`Erreur: ${error.message}`);
     }
 }
-
-async function convertToPbp() { await simpleConversion('convertToPbp', 'Conversion en PBP'); }
-async function mergeBinCue() { await simpleConversion('mergeBinCue', 'Fusion BIN/CUE'); }
-async function extractChdToBin() { await simpleConversion('extractChdToBin', 'Extraction CHD vers BIN'); }
-async function convertWiiToWbfs() { await simpleConversion('convertWiiToWbfs', 'Conversion Wii en WBFS'); }
-async function zipAllRoms() { await simpleConversion('zipAllRoms', 'Compression des ROMs'); }
 
 async function simpleConversion(actionName, modalTitle) {
     const source = document.getElementById('sourceFolder').value;
@@ -188,12 +209,3 @@ async function runUpdate() {
         alert(`Erreur: ${error.message}`);
     }
 }
-
-window.addEventListener('DOMContentLoaded', () => {
-    window.electronAPI.onLogMessage((message) => {
-        appendLog(message);
-    });
-    window.electronAPI.onProgressUpdate?.(({ percent, current, total, message }) => {
-        updateProgress(percent, message, current, total);
-    });
-});
