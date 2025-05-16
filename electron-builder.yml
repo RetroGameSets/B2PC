@@ -1,33 +1,29 @@
-appId: com.retrogamesets.b2pc
+appId: fr.retrogamesets.b2pc
 productName: B2PC
 directories:
-  output: out/make
+  output: out
 files:
-  - "**/*"
-  - "!LOG/**"
-  - "!out/**"
-  - "!*.log"
-extraResources:
-  - from: ressources
-    to: ressources
+  - main.js
+  - preload.js
+  - index.html
+  - renderer.js
+  - ressources/style.css
+  - ressources/icon.ico
+  - ressources/images/**
+extraFiles:
+  - from: ressources/
+    to: ressources/
 nsis:
   oneClick: false
   perMachine: true
   allowToChangeInstallationDirectory: true
-  installerIcon: icon.ico
-  uninstallerIcon: icon.ico
+  installerIcon: ressources/icon.ico
+  uninstallerIcon: ressources/icon.ico
   shortcutName: B2PC
   runAfterFinish: false
   createDesktopShortcut: true
   createStartMenuShortcut: true
 win:
   target:
-    - target: nsis
-      arch:
-        - x64
-publish:
-  provider: github
-  owner: RetroGameSets
-  repo: B2PC
-  vPrefixedTagName: true
-  publishAutoUpdate: true
+    - nsis
+  icon: ressources/icon.ico

@@ -14,10 +14,16 @@ autoUpdater.logger.transports.file.level = 'info';
 initialize();
 let mainWindow;
 
+// Ajuster le chemin des ressources en fonction du contexte (packagé ou dev)
+const isPackaged = app.isPackaged;
+const resourcesPath = isPackaged
+    ? path.join(process.resourcesPath, '..', 'ressources')
+    : path.join(__dirname, 'ressources');
+
 function createWindow() {
     mainWindow = new BrowserWindow({
-        width: 1000,
-        height: 1000,
+        width: 1280,
+        height: 800,
         resizable: true,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
@@ -30,7 +36,20 @@ function createWindow() {
     enable(mainWindow.webContents);
     mainWindow.loadFile('index.html');
     mainWindow.setMenu(null);
-    // mainWindow.webContents.openDevTools();
+   //mainWindow.webContents.openDevTools();
+	
+    // Vérification des chemins
+    const imagesPath = path.join(__dirname, 'ressources', 'images');
+    if (!fs.existsSync(resourcesPath)) {
+        sendLog(`Erreur : Dossier ressources non trouvé à ${resourcesPath}`);
+    } else {
+        sendLog(`Dossier ressources trouvé à ${resourcesPath}`);
+    }
+    if (!fs.existsSync(imagesPath)) {
+        sendLog(`Erreur : Dossier images non trouvé à ${imagesPath}`);
+    } else {
+        sendLog(`Dossier images trouvé à ${imagesPath}`);
+    }
 }
 
 app.whenReady().then(() => {
@@ -43,7 +62,7 @@ app.whenReady().then(() => {
         console.log('Mode développement : tentative de chargement de', devUpdatePath);
         if (fs.existsSync(devUpdatePath)) {
             autoUpdater.updateConfigPath = devUpdatePath;
-            autoUpdater.forceDevUpdateConfig = true; // Forcer les mises à jour en mode dev
+            autoUpdater.forceDevUpdateConfig = true;
             console.log('Mode développement : utilisation de dev-app-update.yml');
         } else {
             console.error('Mode développement : dev-app-update.yml non trouvé à', devUpdatePath);
@@ -58,12 +77,10 @@ app.whenReady().then(() => {
         console.log('Mode production : configuration GitHub pour les mises à jour');
     }
 
-    // Vérifier les mises à jour
     autoUpdater.checkForUpdates().catch(err => {
         console.error('Erreur lors de la vérification des mises à jour:', err);
     });
 
-    // Événements de mise à jour
     autoUpdater.on('checking-for-update', () => {
         console.log('Vérification des mises à jour...');
     });
@@ -76,9 +93,7 @@ app.whenReady().then(() => {
             message: `Une nouvelle version (${info.version}) est disponible. Voulez-vous la télécharger ?`,
             buttons: ['Oui', 'Non']
         }).then(result => {
-            if (result.response === 0) { // Oui
-                autoUpdater.downloadUpdate();
-            }
+            if (result.response === 0) autoUpdater.downloadUpdate();
         });
     });
 
@@ -90,9 +105,7 @@ app.whenReady().then(() => {
             message: 'La mise à jour a été téléchargée. L’application va redémarrer pour l’installer.',
             buttons: ['Installer', 'Plus tard']
         }).then(result => {
-            if (result.response === 0) { // Installer
-                autoUpdater.quitAndInstall();
-            }
+            if (result.response === 0) autoUpdater.quitAndInstall();
         });
     });
 
@@ -111,9 +124,13 @@ app.on('window-all-closed', () => {
 });
 
 function sendLog(msg) {
-    if (mainWindow) {
+    if (mainWindow && msg) {
         const timestamp = new Date().toLocaleTimeString('fr-FR', { hour12: false });
-        mainWindow.webContents.send('log-message', `${timestamp} - ${msg}`);
+        const logMessage = `${timestamp} - ${msg}`;
+        console.log('Envoi log:', logMessage); // Débogage
+        mainWindow.webContents.send('log-message', logMessage);
+    } else {
+        console.error('Erreur sendLog: mainWindow ou msg non défini');
     }
 }
 
@@ -137,10 +154,16 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
         sendLog('Début du patch Xbox...');
         sendLog(`Dossier source: ${source}`);
         sendLog(`Dossier destination: ${destination}`);
-
+		
         await fsPromises.mkdir(destination, { recursive: true });
         sendLog(`Dossier destination créé ou existant: ${destination}`);
-
+		const sevenZipPath = path.join(resourcesPath, '7za.exe');
+		
+        if (!fs.existsSync(sevenZipPath)) {
+            sendLog(`Erreur : 7za.exe non trouvé à ${sevenZipPath}`);
+            throw new Error(`7za.exe non trouvé à ${sevenZipPath}`);
+        }
+        sendLog(`Utilisation de 7za.exe à ${sevenZipPath}`);
         const archiveExtensions = ['.7z', '.zip', '.gz', '.rar'];
         const sourceFiles = await fsPromises.readdir(source, { recursive: true });
         const archives = sourceFiles.filter(f => archiveExtensions.includes(path.extname(f).toLowerCase()));
@@ -150,7 +173,6 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
         sendLog(`ISOs détectés : ${sourceIsos.length}`);
 
         const validArchives = [];
-        const sevenZipPath = path.join(__dirname, 'ressources', '7za.exe');
 
         for (let i = 0; i < archives.length; i++) {
             const file = archives[i];
@@ -237,7 +259,7 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
             }
         }
 
-        const xisoSource = path.join(__dirname, 'ressources', 'xiso.exe');
+        const xisoSource = path.join(resourcesPath, 'xiso.exe');
         const xisoDest = path.join(destination, 'xiso.exe');
         await fsPromises.copyFile(xisoSource, xisoDest);
 
@@ -276,7 +298,6 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
                         fsPromises.unlink(isoOldPath).catch(err => {
                             sendLog(`Erreur lors de la suppression de ${isoOldPath}: ${err.message}`);
                         });
-                        // Supprimer le fichier ISO source après conversion
                         fsPromises.unlink(iso).catch(err => {
                             sendLog(`Erreur lors de la suppression de ${iso}: ${err.message}`);
                         });
@@ -323,12 +344,15 @@ ipcMain.handle('convert-to-chdv5', async (_, source, dest) => {
         sendLog('Début de la conversion en CHDv5...');
         sendLog(`Dossier source: ${source}`);
         sendLog(`Dossier destination: ${destination}`);
-
-        // Créer le dossier destination\CHD si nécessaire
+       
+        if (!fs.existsSync(sevenZipPath)) {
+            sendLog(`Erreur : 7za.exe non trouvé à ${sevenZipPath}`);
+            throw new Error(`7za.exe non trouvé à ${sevenZipPath}`);
+        }
+        sendLog(`Utilisation de 7za.exe à ${sevenZipPath}`);
         await fsPromises.mkdir(destination, { recursive: true });
         sendLog(`Dossier destination créé ou existant: ${destination}`);
 
-        // Étape 1 : Détecter les archives et fichiers d'entrée
         const archiveExtensions = ['.7z', '.zip', '.gz', '.rar'];
         const inputExtensions = ['.iso', '.cue', '.gdi'];
         const sourceFiles = await fsPromises.readdir(source, { recursive: true });
@@ -338,9 +362,7 @@ ipcMain.handle('convert-to-chdv5', async (_, source, dest) => {
         sendLog(`Archives détectées : ${archives.length}`);
         sendLog(`Fichiers d'entrée détectés : ${sourceInputs.length}`);
 
-        // Étape 2 : Vérification des archives
         const validArchives = [];
-        const sevenZipPath = path.join(__dirname, 'ressources', '7za.exe');
 
         for (let i = 0; i < archives.length; i++) {
             const file = archives[i];
@@ -374,7 +396,6 @@ ipcMain.handle('convert-to-chdv5', async (_, source, dest) => {
 
         sendLog(`Archives valides : ${validArchives.length}`);
 
-        // Étape 3 : Extraction des archives valides
         const archivesToExtract = [];
         const skippedArchives = [];
         for (const file of validArchives) {
@@ -411,14 +432,13 @@ ipcMain.handle('convert-to-chdv5', async (_, source, dest) => {
             });
         }
 
-        // Étape 4 : Conversion des fichiers en CHD
         const sourceFilesAfterExtract = await fsPromises.readdir(source, { recursive: true });
         const allInputs = sourceFilesAfterExtract.filter(f => inputExtensions.includes(path.extname(f).toLowerCase())).map(f => path.join(source, f));
 
         const inputsToConvert = [];
         for (const input of allInputs) {
             const fileName = path.basename(input, path.extname(input));
-            const outputPath = path.join(destination, `${baseName}.chd`);
+            const outputPath = path.join(destination, `${fileName}.chd`);
             if (skippedArchives.includes(fileName)) {
                 sendLog(`${fileName}.chd correspond à une archive ignorée, conversion ignorée.`);
             } else if (await fsPromises.access(outputPath).then(() => true).catch(() => false)) {
@@ -467,7 +487,6 @@ ipcMain.handle('convert-to-chdv5', async (_, source, dest) => {
                             sendLog(`chdman [${baseName}]: ${lastLine}`);
                         }
                         sendLog(`Conversion de ${baseName} OK`);
-                        // Supprimer les fichiers d'entrée après conversion
                         const inputExt = path.extname(inputPath).toLowerCase();
                         if (inputExt === '.cue' || inputExt === '.gdi') {
                             const cueContent = fsPromises.readFileSync(inputPath, 'utf8');
