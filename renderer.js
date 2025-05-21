@@ -14,6 +14,7 @@ document.getElementById('selectSourceFolder').addEventListener('click', selectSo
 document.getElementById('selectDestinationFolder').addEventListener('click', selectDestinationFolder);
 document.getElementById('convertToChdv5').addEventListener('click', convertToChdv5);
 document.getElementById('patchXboxIso').addEventListener('click', patchXboxIso);
+document.getElementById('convertIsoToRvz').addEventListener('click', convertIsoToRvz);
 document.getElementById('openLogFolder').addEventListener('click', openLogFolder);
 document.getElementById('closeLogModal').addEventListener('click', closeLogModal);
 
@@ -40,20 +41,19 @@ window.addEventListener('DOMContentLoaded', () => {
     const versionElement = document.querySelector('footer');
     if (versionElement) {
         const appVersion = window.electronAPI.getAppVersion();
-        versionElement.innerHTML = `RetroGameSets 2025 // Version ${appVersion}`;
+        versionElement.innerHTML = `RetroGameSets 2025 // Version ${appVersion} // <a href="#" class="text-blue-500">AIDE - INSTRUCTIONS</a>`;
     } else {
         console.error('Élément footer non trouvé');
     }
 });
-
-
 
 function updateButtonStates() {
     const source = document.getElementById('sourceFolder').value;
     const destination = document.getElementById('destinationFolder').value;
     const patchButton = document.getElementById('patchXboxIso');
     const chdButton = document.getElementById('convertToChdv5');
-    const buttons = [patchButton, chdButton];
+    const rvzButton = document.getElementById('convertIsoToRvz');
+    const buttons = [patchButton, chdButton, rvzButton];
     buttons.forEach(button => {
         button.disabled = !(source && destination);
     });
@@ -104,7 +104,6 @@ function closeLogModal() {
 async function appendLog(message) {
     const logContent = document.getElementById('logContent');
     if (logContent) {
-        // Suppression de la mise à jour du DOM ici, car déjà fait dans onLogMessage
         if (logFilePath) {
             try {
                 await window.electronAPI.writeLog(logFilePath, message);
@@ -183,6 +182,27 @@ async function convertToChdv5() {
     }
 }
 
+async function convertIsoToRvz() {
+    const source = document.getElementById('sourceFolder').value;
+    const destination = document.getElementById('destinationFolder').value;
+    if (!source || !destination) return alert('Veuillez sélectionner les dossiers source et destination.');
+    alert('Cette fonction convertit les ISO GameCube/Wii en RVZ pour Dolphin Emulator');
+    showLogModal('Conversion ISO to RVZ');
+    try {
+        const result = await window.electronAPI.convertIsoToRvz(source, destination);
+        updateProgress(100, 'Conversion terminée');
+        const { convertedGames, errorCount } = result.summary;
+        if (errorCount > 0) {
+            alert(`Opération terminée avec ${errorCount} erreur(s). Consultez le journal pour plus de détails.`);
+        } else {
+            alert('Tous les jeux sont convertis, y\'a plus qu\'à jouer :D');
+        }
+    } catch (error) {
+        appendLog(`Erreur: ${error.message}`);
+        alert(`Erreur: ${error.message}`);
+    }
+}
+
 async function simpleConversion(actionName, modalTitle) {
     const source = document.getElementById('sourceFolder').value;
     const destination = document.getElementById('destinationFolder').value;
@@ -192,18 +212,6 @@ async function simpleConversion(actionName, modalTitle) {
         await window.electronAPI[actionName](source, destination);
         appendLog('Opération terminée avec succès.');
         updateProgress(100, 'Opération terminée');
-    } catch (error) {
-        appendLog(`Erreur: ${error.message}`);
-        alert(`Erreur: ${error.message}`);
-    }
-}
-
-async function runUpdate() {
-    showLogModal('Mise à jour');
-    try {
-        await window.electronAPI.runUpdate();
-        appendLog('Mise à jour terminée avec succès.');
-        updateProgress(100, 'Mise à jour terminée');
     } catch (error) {
         appendLog(`Erreur: ${error.message}`);
         alert(`Erreur: ${error.message}`);
