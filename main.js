@@ -17,7 +17,7 @@ let mainWindow;
 // Ajuster le chemin des ressources en fonction du contexte (packagé ou dev)
 const isPackaged = app.isPackaged;
 const resourcesPath = isPackaged
-    ? path.join(process.resourcesPath, 'ressources')
+    ? path.join(path.dirname(process.resourcesPath), 'ressources') // Remonte d'un dossier et va dans 'ressources'
     : path.join(__dirname, 'ressources');
 
 function createWindow() {
@@ -184,13 +184,14 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
 		
         await fsPromises.mkdir(destination, { recursive: true });
         sendLog(`Dossier destination créé ou existant: ${destination}`);
-        const sevenZipPath = path.join(resourcesPath, '7za.exe');
-        const xisoPath = path.join(resourcesPath, 'xiso.exe');
-		
-        if (!fs.existsSync(sevenZipPath)) {
-            sendLog(`Erreur : 7za.exe non trouvé à ${sevenZipPath}`);
-            throw new Error(`7za.exe non trouvé à ${sevenZipPath}`);
-        }
+          const xisoPath = path.join(resourcesPath, 'xiso.exe');
+		sendLog(`Chemin calculé de resourcesPath : ${resourcesPath}`);
+const sevenZipPath = path.join(resourcesPath, '7za.exe');
+sendLog(`Chemin attendu de 7za.exe : ${sevenZipPath}`);
+if (!fs.existsSync(sevenZipPath)) {
+    sendLog(`Erreur : 7za.exe non trouvé à ${sevenZipPath}`);
+    throw new Error(`7za.exe non trouvé à ${sevenZipPath}`);
+}
         sendLog(`Utilisation de 7za.exe à ${sevenZipPath}`);
 
         if (!fs.existsSync(xisoPath)) {
