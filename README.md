@@ -28,13 +28,13 @@
 - **Utilisation** : Sélectionnez un dossier source avec des ISO ou archives Xbox, un dossier destination, et cliquez sur **Patch XBOX ISO xemu** dans l’onglet **Patch**.
 
 ### 3. Conversion /Compression Gamecube ISO en RVZ pour dolphin
-- **Description** : Convertit et compresse les fichiers ISO Gamecube pour un gain de place.
+- **Description** : Convertit et compresse les fichiers ISO Gamecube/Wii pour un gain de place.
 - **Détails** :
   - Traite les fichiers `.iso` directement dans le dossier source ou extraits depuis des archives (`.zip`, `.7z`, `.gz`, `.rar`).
   - Extrait les archives dans le dossier source, patche les ISO avec `DolphinTool.exe`, et place les résultats dans un sous-dossier `RVZ` du dossier destination.
   - Supprime les fichiers extraits après conversion.
   - Fournit des logs détaillés et une barre de progression.
-- **Utilisation** : Sélectionnez un dossier source avec des ISO ou archives Xbox, un dossier destination, et cliquez sur **Convert ISO to RVZ** dans l’onglet **Patch**.
+- **Utilisation** : Sélectionnez un dossier source avec des ISO ou archives Xbox, un dossier destination, et cliquez sur **Convert ISO to RVZ** dans l’onglet **Conversion**.
 
 
 ## Prérequis
