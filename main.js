@@ -424,7 +424,7 @@ ipcMain.handle('convert-to-chdv5', async (_, source, dest) => {
         const archiveExtensions = ['.7z', '.zip', '.gz', '.rar'];
         const sourceFiles = await fsPromises.readdir(source, { recursive: true });
         const archives = sourceFiles.filter(f => archiveExtensions.includes(path.extname(f).toLowerCase()));
-        const sourceCues = sourceFiles.filter(f => ['.cue', '.gdi'].includes(path.extname(f).toLowerCase()));
+        const sourceCues = sourceFiles.filter(f => ['.cue', '.gdi', '.bin'].includes(path.extname(f).toLowerCase()));
         const sourceIsos = sourceFiles.filter(f => path.extname(f).toLowerCase() === '.iso');
 
         sendLog(`Archives détectées : ${archives.length}`);
@@ -446,7 +446,7 @@ ipcMain.handle('convert-to-chdv5', async (_, source, dest) => {
                     .on('error', reject);
             });
 
-            const targetFiles = filesInside.filter(f => ['.cue', '.gdi', '.iso'].some(ext => f.toLowerCase().endsWith(ext)));
+            const targetFiles = filesInside.filter(f => ['.cue', '.gdi', '.bin', '.iso'].some(ext => f.toLowerCase().endsWith(ext)));
             if (targetFiles.length > 0) {
                 validArchives.push({ file, fullPath, targets: targetFiles });
             } else {
@@ -460,7 +460,7 @@ ipcMain.handle('convert-to-chdv5', async (_, source, dest) => {
 
         for (let i = 0; i < validArchives.length; i++) {
             const { file, fullPath, targets } = validArchives[i];
-            sendLog(`Extraction des fichiers .cue/.gdi/.iso de ${file}...`);
+            sendLog(`Extraction des fichiers .cue/.gdi/.bin/.iso de ${file}...`);
             sendProgress(10 + (i / validArchives.length) * 20, `Extraction des archives`, i + 1, validArchives.length);
             await extractWith7z(fullPath, source, targets, sevenZipPath);
             sendLog(`Extraction terminée : ${file} -> ${source} (${targets.join(', ')})`);

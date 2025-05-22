@@ -36,6 +36,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
         }
         return ipcRenderer.invoke('patch-xbox-iso', source, dest);
     },
+	convertToChdv5: async (source, dest) => {
+        if (!await fs.access(source).then(() => true).catch(() => false)) {
+            throw new Error(`Dossier source n'existe pas : ${source}`);
+        }
+        if (!await fs.access(dest).then(() => true).catch(() => false)) {
+            throw new Error(`Dossier destination n'existe pas : ${dest}`);
+        }
+        return ipcRenderer.invoke('convert-to-chdv5', source, dest);
+    },
     convertIsoToRvz: async (source, dest) => {
         if (!await fs.access(source).then(() => true).catch(() => false)) {
             throw new Error(`Dossier source n'existe pas : ${source}`);
