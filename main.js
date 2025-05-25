@@ -14,7 +14,6 @@ autoUpdater.logger.transports.file.level = 'info';
 initialize();
 let mainWindow;
 
-
 // Ajuster le chemin des ressources en fonction du contexte (packagé ou dev)
 const isPackaged = app.isPackaged;
 const resourcesPath = isPackaged
@@ -24,7 +23,7 @@ const resourcesPath = isPackaged
 const tools = {
     sevenZip: path.join(resourcesPath, '7za.exe'),
     xiso: path.join(resourcesPath, 'xiso.exe'),
-	chdman: path.join(resourcesPath, 'chdman.exe'), 
+    chdman: path.join(resourcesPath, 'chdman.exe'), 
     dolphinTool: path.join(resourcesPath, 'dolphin-tool.exe')
 };
 
@@ -38,7 +37,7 @@ async function validateTools() {
     }
 }
 
-async function extractArchives(sourceDir, sevenZipPath, extensions = ['.7z', '.zip', '.gz', '.rar'], targetExtensions = ['.iso', '.cue', '.gdi']) {
+async function extractArchives(sourceDir, sevenZipPath, extensions = ['.7z', '.zip', '.gz', '.rar'], targetExtensions = ['.cue', '.bin', '.gdi', '.iso']) {
     const sourceFiles = [];
     const walkDir = async (dir) => {
         const files = await fsPromises.readdir(dir, { withFileTypes: true });
@@ -71,13 +70,13 @@ async function extractArchives(sourceDir, sevenZipPath, extensions = ['.7z', '.z
 
         const targetFiles = filesInside.filter(f => targetExtensions.some(ext => f.toLowerCase().endsWith(ext)));
         if (targetFiles.length > 0) {
-            // Inclure les fichiers .bin associés aux .cue/.gdi
+            // Inclure les fichiers .bin associés aux .cue
             const associatedFiles = [];
             for (const target of targetFiles) {
                 associatedFiles.push(target);
-                if (['.cue', '.gdi'].some(ext => target.toLowerCase().endsWith(ext))) {
-                    const baseName = path.basename(target, path.extname(target));
-                    const binFile = filesInside.find(f => f.toLowerCase() === `${baseName.toLowerCase()}.bin`);
+                if (target.toLowerCase().endsWith('.cue')) {
+                    const baseName = path.basename(target, '.cue');
+                    const binFile = filesInside.find(f => f.toLowerCase() === `${baseName}.bin` || f.toLowerCase() === `${baseName.toLowerCase()}.bin`);
                     if (binFile) associatedFiles.push(binFile);
                 }
             }
@@ -146,12 +145,6 @@ async function cleanupFiles(sourceDir, extensionsToRemove) {
         }
     }
 }
-
-
-
-
-
-
 
 async function runTool(toolPath, args, workingDir, fileName, totalFiles, fileIndex, operation) {
     return new Promise((resolve, reject) => {
@@ -247,11 +240,6 @@ async function runTool(toolPath, args, workingDir, fileName, totalFiles, fileInd
     });
 }
 
-
-
-
-
-
 function sendLog(msg) {
     if (mainWindow && msg) {
         const timestamp = new Date().toLocaleTimeString('fr-FR', { hour12: false });
@@ -288,7 +276,7 @@ function createWindow() {
     enable(mainWindow.webContents);
     mainWindow.loadFile('index.html');
     mainWindow.setMenu(null);
-	// mainWindow.webContents.openDevTools();
+    // mainWindow.webContents.openDevTools();
 
     const imagesPath = path.join(__dirname, 'ressources', 'images');
     if (!fs.existsSync(resourcesPath)) {
@@ -407,7 +395,6 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
             convertedGames++;
         }
 
-        
         if (fs.existsSync(path.join(destination, 'xiso.exe'))) {
             await fsPromises.unlink(path.join(destination, 'xiso.exe')).catch(err => sendLog(`Erreur lors de la suppression de xiso.exe: ${err.message}`));
             sendLog(`xiso.exe supprimé de ${destination}`);
@@ -420,7 +407,7 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
         sendLog(`Archives ignorées : ${ignoredArchives}`);
         sendLog(`Erreurs : ${errorCount}`);
 
-		sendLog('Demande de confirmation pour le nettoyage des fichiers source...');
+        sendLog('Demande de confirmation pour le nettoyage des fichiers source...');
         const shouldCleanup = await new Promise((resolve) => {
             const cleanupChannel = 'confirm-cleanup';
             ipcMain.once(cleanupChannel, (_, shouldDelete) => {
@@ -432,12 +419,12 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
         if (shouldCleanup) {
             sendLog('Nettoyage des fichiers extraits...');
             sendProgress(80, `Nettoyage`);
-            await cleanupFiles(source, ['.iso' ,'.old']);
+            await cleanupFiles(source, ['.iso', '.old']);
             sendLog('Nettoyage terminé.');
         } else {
             sendLog('Nettoyage annulé par l’utilisateur.');
         }
-		
+        
         return { summary: { convertedGames, optimizedGames, ignoredArchives, errorCount } };
     } catch (error) {
         sendLog(`Erreur lors du patch Xbox: ${error.message}`);
@@ -454,7 +441,7 @@ ipcMain.handle('convert-to-chdv5', async (_, source, dest) => {
     let convertedGames = 0, skippedGames = 0, errorCount = 0;
 
     try {
-       // sendLog('Début de la conversion en CHD...');
+        // sendLog('Début de la conversion en CHD...');
         sendLog(`Dossier source: ${source}`);
         sendLog(`Dossier destination: ${destination}`);
         await validateTools();
@@ -517,9 +504,9 @@ ipcMain.handle('convert-to-chdv5', async (_, source, dest) => {
         sendLog(`Jeux convertis : ${convertedGames}`);
         sendLog(`Jeux ignorés : ${skippedGames}`);
         sendLog(`Erreurs : ${errorCount}`);
-		sendLog('Demande de confirmation pour le nettoyage des fichiers source...');
+        sendLog('Demande de confirmation pour le nettoyage des fichiers source...');
         
-		const shouldCleanup = await new Promise((resolve) => {
+        const shouldCleanup = await new Promise((resolve) => {
             const cleanupChannel = 'confirm-cleanup';
             ipcMain.once(cleanupChannel, (_, shouldDelete) => {
                 resolve(shouldDelete);
@@ -634,7 +621,7 @@ ipcMain.handle('extract-chd', async (_, source, dest) => {
         sendLog(`Jeux extraits : ${extractedGames}`);
         sendLog(`Jeux ignorés : ${skippedGames}`);
         sendLog(`Erreurs : ${errorCount}`);
-		sendLog('Demande de confirmation pour le nettoyage des fichiers source...');
+        sendLog('Demande de confirmation pour le nettoyage des fichiers source...');
         const shouldCleanup = await new Promise((resolve) => {
             const cleanupChannel = 'confirm-cleanup';
             ipcMain.once(cleanupChannel, (_, shouldDelete) => {
@@ -803,5 +790,202 @@ ipcMain.handle('convert-iso-to-rvz', async (_, source, dest) => {
         throw error;
     } finally {
         sendProgress(100, `Terminé`);
+    }
+});
+
+ipcMain.handle('merge-bin-cue', async (_, source, dest) => {
+    const startTime = Date.now();
+    const tempChdDir = await prepareDirectories(dest, 'Temp_CHD'); // Dossier temporaire pour les fichiers CHD
+    const finalDir = await prepareDirectories(dest, 'Merged_CUE'); // Dossier final pour les fichiers fusionnés
+    let mergedGames = 0, skippedGames = 0, errorCount = 0;
+
+    try {
+        sendLog('Début de la fusion des fichiers BIN/CUE...');
+        sendLog(`Dossier source: ${source}`);
+        sendLog(`Dossier temporaire pour CHD: ${tempChdDir}`);
+        sendLog(`Dossier destination final: ${finalDir}`);
+        await validateTools();
+
+        // Étape 1 : Extraire les archives pour accéder aux fichiers .cue et .bin
+        const allCues = await extractArchives(source, tools.sevenZip, ['.7z', '.zip', '.gz', '.rar'], ['.cue', '.bin']);
+        sendLog(`Total des fichiers .cue et .bin trouvés après extraction : ${allCues.length}`);
+        if (allCues.length === 0) {
+            sendLog('Aucun fichier .cue ou .bin trouvé pour la fusion. Assurez-vous que le dossier source contient des fichiers compatibles.');
+            return { summary: { mergedGames, skippedGames, errorCount } };
+        }
+
+        // Filtrer les fichiers .cue avec plusieurs .bin associés
+        const multiBinCues = [];
+        for (const cue of allCues.filter(f => path.extname(f.name).toLowerCase() === '.cue')) {
+            const cueContent = await fsPromises.readFile(cue.fullPath, 'utf-8');
+            const binFiles = cueContent.match(/FILE\s+"([^"]+\.bin)"/gi);
+            if (binFiles && binFiles.length > 1) { // Vérifie s'il y a plusieurs .bin
+                const cueDir = path.dirname(cue.fullPath);
+                const binNames = binFiles.map(match => match.match(/"([^"]+)"/)[1].toLowerCase());
+                const allBinsPresent = binNames.every(binName => allCues.some(f => path.basename(f.name).toLowerCase() === binName && path.dirname(f.fullPath) === cueDir));
+                if (allBinsPresent) {
+                    multiBinCues.push(cue);
+                    sendLog(`Fichier .cue avec plusieurs .bin détecté : ${cue.name} (tous les .bin trouvés)`);
+                } else {
+                    sendLog(`Fichier .cue ignoré : ${cue.name} (certains .bin manquants)`);
+                    skippedGames++;
+                }
+            } else {
+                sendLog(`Fichier .cue avec un seul .bin, ignoré : ${cue.name}`);
+                skippedGames++;
+            }
+        }
+
+        sendLog(`Total des fichiers .cue avec plusieurs .bin trouvés : ${multiBinCues.length}`);
+        if (multiBinCues.length === 0) {
+            sendLog('Aucun fichier .cue avec plusieurs .bin trouvé pour la fusion.');
+            return { summary: { mergedGames, skippedGames, errorCount } };
+        }
+
+        // Vérifier les permissions d'écriture
+        try {
+            await fsPromises.access(tempChdDir, fs.constants.W_OK);
+            await fsPromises.access(finalDir, fs.constants.W_OK);
+        } catch (error) {
+            sendLog(`Erreur: Pas de permissions d'écriture dans ${tempChdDir} ou ${finalDir}. Exécutez en tant qu'administrateur ou choisissez un autre dossier.`);
+            throw new Error('Permissions insuffisantes pour écrire dans le dossier de destination');
+        }
+
+        // Étape 2 : Convertir chaque .cue avec plusieurs .bin en .chd
+        sendProgress(30, `Conversion en CHD pour fusion`, 0, multiBinCues.length, 0);
+        for (let i = 0; i < multiBinCues.length; i++) {
+            const cue = multiBinCues[i].name;
+            const fullCuePath = path.join(source, cue);
+            const outputChdPath = path.join(tempChdDir, path.basename(cue, '.cue') + '.chd');
+            sendLog(`Conversion de ${cue} en CHD...`);
+            sendProgress(30 + (i / multiBinCues.length) * 25, `Conversion en CHD pour fusion`, i + 1, multiBinCues.length, 0);
+
+            if (fs.existsSync(outputChdPath)) {
+                sendLog(`Fichier CHD déjà existant, ignoré : ${cue} -> ${outputChdPath}`);
+                continue;
+            }
+
+            try {
+                const args = ['createcd', '-i', fullCuePath, '-o', outputChdPath];
+                await runTool(tools.chdman, args, tempChdDir, cue, multiBinCues.length, i, 'Conversion en CHD pour fusion');
+
+                if (fs.existsSync(outputChdPath)) {
+                    const stats = fs.statSync(outputChdPath);
+                    if (stats.size > 0) {
+                        sendLog(`Conversion réussie : ${cue} -> ${outputChdPath}`);
+                    } else {
+                        await fsPromises.unlink(outputChdPath).catch(err => sendLog(`Erreur lors de la suppression de ${outputChdPath}: ${err.message}`));
+                        throw new Error('Fichier .chd généré mais vide ou invalide');
+                    }
+                } else {
+                    throw new Error('Fichier .chd non généré');
+                }
+            } catch (error) {
+                errorCount++;
+                sendLog(`Échec de la conversion de ${cue} en CHD: ${error.message || error.stack || 'Aucune information disponible'}`);
+                if (fs.existsSync(outputChdPath)) {
+                    await fsPromises.unlink(outputChdPath).catch(err => sendLog(`Erreur lors de la suppression de ${outputChdPath}: ${err.message}`));
+                    sendLog(`Fichier .chd supprimé : ${outputChdPath}`);
+                }
+                continue; // Continue avec le prochain fichier
+            }
+        }
+
+        // Étape 3 : Extraire les fichiers .chd en .cue avec un seul .bin
+        const allChds = [];
+        const walkChdDir = async (dir) => {
+            const files = await fsPromises.readdir(dir, { withFileTypes: true });
+            for (const file of files) {
+                const fullPath = path.join(dir, file.name);
+                if (file.isDirectory()) {
+                    await walkChdDir(fullPath);
+                } else if (path.extname(file.name).toLowerCase() === '.chd') {
+                    allChds.push({ name: file.name, fullPath });
+                }
+            }
+        };
+        await walkChdDir(tempChdDir);
+
+        sendLog(`Total des fichiers .chd à extraire pour fusion : ${allChds.length}`);
+        sendProgress(55, `Extraction CHD pour fusion`, 0, allChds.length, 0);
+        for (let i = 0; i < allChds.length; i++) {
+            const chd = allChds[i].name;
+            const fullChdPath = path.join(tempChdDir, chd);
+            const outputCuePath = path.join(finalDir, path.basename(chd, path.extname(chd)) + '.cue');
+            const outputBinPath = path.join(finalDir, path.basename(chd, path.extname(chd)) + '.bin');
+            sendLog(`Extraction de ${chd} pour fusion...`);
+            sendProgress(55 + (i / allChds.length) * 25, `Extraction CHD pour fusion`, i + 1, allChds.length, 0);
+
+            if (fs.existsSync(outputCuePath) || fs.existsSync(outputBinPath)) {
+                sendLog(`Fichiers déjà extraits, ignoré : ${chd} -> ${outputCuePath}`);
+                skippedGames++;
+                continue;
+            }
+
+            try {
+                const args = ['extractcd', '-i', fullChdPath, '-o', outputCuePath, '-ob', outputBinPath];
+                await runTool(tools.chdman, args, finalDir, chd, allChds.length, i, 'Extraction CHD pour fusion');
+
+                if (fs.existsSync(outputCuePath) && fs.existsSync(outputBinPath)) {
+                    const cueStats = fs.statSync(outputCuePath);
+                    const binStats = fs.statSync(outputBinPath);
+                    if (cueStats.size > 0 && binStats.size > 0) {
+                        sendLog(`Fusion réussie : ${chd} -> ${outputCuePath} et ${outputBinPath}`);
+                        mergedGames++;
+                    } else {
+                        await fsPromises.unlink(outputCuePath).catch(err => sendLog(`Erreur lors de la suppression de ${outputCuePath}: ${err.message}`));
+                        await fsPromises.unlink(outputBinPath).catch(err => sendLog(`Erreur lors de la suppression de ${outputBinPath}: ${err.message}`));
+                        throw new Error('Fichiers .cue ou .bin générés mais vides ou invalides');
+                    }
+                } else {
+                    throw new Error('Fichiers .cue ou .bin non générés');
+                }
+            } catch (error) {
+                errorCount++;
+                sendLog(`Échec de l'extraction de ${chd} pour fusion: ${error.message || error.stack || 'Aucune information disponible'}`);
+                if (fs.existsSync(outputCuePath)) {
+                    await fsPromises.unlink(outputCuePath).catch(err => sendLog(`Erreur lors de la suppression de ${outputCuePath}: ${err.message}`));
+                    sendLog(`Fichier .cue supprimé : ${outputCuePath}`);
+                }
+                if (fs.existsSync(outputBinPath)) {
+                    await fsPromises.unlink(outputBinPath).catch(err => sendLog(`Erreur lors de la suppression de ${outputBinPath}: ${err.message}`));
+                    sendLog(`Fichier .bin supprimé : ${outputBinPath}`);
+                }
+                continue; // Continue avec le prochain fichier
+            }
+        }
+
+        const duration = (Date.now() - startTime) / 1000;
+        sendLog(`Fusion BIN/CUE terminée en ${duration}s`);
+        sendLog(`Jeux fusionnés : ${mergedGames}`);
+        sendLog(`Jeux ignorés : ${skippedGames}`);
+        sendLog(`Erreurs : ${errorCount}`);
+
+        sendLog('Demande de confirmation pour le nettoyage des fichiers source...');
+        const shouldCleanup = await new Promise((resolve) => {
+            const cleanupChannel = 'confirm-cleanup';
+            ipcMain.once(cleanupChannel, (_, shouldDelete) => {
+                resolve(shouldDelete);
+            });
+            mainWindow.webContents.send('request-cleanup-confirmation', cleanupChannel);
+        });
+
+        if (shouldCleanup) {
+            sendLog('Nettoyage des fichiers extraits et temporaires...');
+            sendProgress(80, `Nettoyage`);
+            await cleanupFiles(source, ['.cue', '.bin']); // Nettoie les fichiers .cue et .bin sources
+            await cleanupFiles(tempChdDir, ['.chd']); // Nettoie les fichiers CHD temporaires
+            sendLog('Nettoyage terminé.');
+        } else {
+            sendLog('Nettoyage annulé par l’utilisateur.');
+        }
+
+        return { summary: { mergedGames, skippedGames, errorCount } };
+    } catch (error) {
+        sendLog(`Erreur lors de la fusion BIN/CUE: ${error.message || error.stack || 'Aucune information disponible'}`);
+        errorCount++;
+        throw error;
+    } finally {
+        sendProgress(100, `Terminé`, 0, 0, 0);
     }
 });

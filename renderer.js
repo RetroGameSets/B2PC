@@ -12,7 +12,6 @@ let logFilePath = `${logDir}/LOG-${timestamp}.txt`;
 
 // Stocker le résumé pour l’afficher dans un tableau
 let summary = { convertedGames: 0, skippedGames: 0, errorCount: 0, duration: 0 };
-// État pour suivre les erreurs d'extraction
 let hasExtractionError = false;
 
 document.getElementById('selectSourceFolder').addEventListener('click', selectSourceFolder);
@@ -21,6 +20,7 @@ document.getElementById('convertToChdv5').addEventListener('click', convertToChd
 document.getElementById('extractChd').addEventListener('click', extractChd);
 document.getElementById('patchXboxIso').addEventListener('click', patchXboxIso);
 document.getElementById('convertIsoToRvz').addEventListener('click', convertIsoToRvz);
+document.getElementById('mergeBinCue').addEventListener('click', mergeBinCue);
 document.getElementById('openLogFolder').addEventListener('click', openLogFolder);
 document.getElementById('closeLogModal').addEventListener('click', closeLogModal);
 
@@ -46,6 +46,7 @@ window.electronAPI.onLogMessage((message) => {
             message.includes('Extraction terminée') ||
             message.includes('Nettoyage terminé') ||
             message.includes('Extraction réussie') ||
+            message.includes('Fusion réussie') ||
             (message.includes('Compression complete') && message.includes('final ratio'))
         ) {
             messageClass = 'bg-green-100 text-green-800';
@@ -54,6 +55,8 @@ window.electronAPI.onLogMessage((message) => {
             message.includes('Demande de confirmation') ||
             message.includes('Nettoyage annulé') ||
             message.includes('Jeu déjà converti') ||
+            message.includes('Fichiers déjà extraits') ||
+            message.includes('Fichier déjà converti') ||
             message.includes('Total des fichiers') ||
             message.includes('Dossier source') ||
             message.includes('Dossier destination') ||
@@ -64,11 +67,11 @@ window.electronAPI.onLogMessage((message) => {
         }
 
         // Extraire les informations du résumé
-        if (message.includes('Conversion RVZ terminée en')) {
+        if (message.includes('Conversion RVZ terminée en') || message.includes('Conversion CHD terminée en') || message.includes('Extraction CHD terminée en') || message.includes('Fusion BIN/CUE terminée en')) {
             const durationMatch = message.match(/terminée en (\d+\.\d+)s/);
             if (durationMatch) summary.duration = parseFloat(durationMatch[1]);
-        } else if (message.includes('Jeux convertis :')) {
-            const convertedMatch = message.match(/Jeux convertis : (\d+)/);
+        } else if (message.includes('Jeux convertis :') || message.includes('Jeux extraits :') || message.includes('Jeux fusionnés :')) {
+            const convertedMatch = message.match(/(?:Jeux convertis|Jeux extraits|Jeux fusionnés) : (\d+)/);
             if (convertedMatch) summary.convertedGames = parseInt(convertedMatch[1]);
         } else if (message.includes('Jeux ignorés :')) {
             const skippedMatch = message.match(/Jeux ignorés : (\d+)/);
@@ -111,8 +114,6 @@ window.electronAPI.onProgressUpdate((data) => {
     updateProgress(data.totalProgress, data.currentFileProgress, data.message);
 });
 
-
-
 // Mettre à jour la version dans le footer
 window.addEventListener('DOMContentLoaded', () => {
     const versionElement = document.querySelector('footer');
@@ -130,7 +131,8 @@ function updateButtonStates() {
     const patchButton = document.getElementById('patchXboxIso');
     const chdButton = document.getElementById('convertToChdv5');
     const rvzButton = document.getElementById('convertIsoToRvz');
-    const buttons = [patchButton, chdButton, rvzButton];
+    const mergeButton = document.getElementById('mergeBinCue');
+    const buttons = [patchButton, chdButton, rvzButton, mergeButton];
     buttons.forEach(button => {
         button.disabled = !(source && destination);
     });
@@ -349,6 +351,27 @@ async function convertIsoToRvz() {
             alert(`Opération terminée avec ${errorCount} erreur(s). Consultez le journal pour plus de détails.`);
         } else {
             alert('Tous les jeux sont convertis, y\'a plus qu\'à jouer :D');
+        }
+    } catch (error) {
+        appendLog(`Erreur: ${error.message}`);
+        alert(`Erreur: ${error.message}`);
+    }
+}
+
+async function mergeBinCue() {
+    const source = document.getElementById('sourceFolder').value;
+    const destination = document.getElementById('destinationFolder').value;
+    if (!source || !destination) return alert('Veuillez sélectionner les dossiers source et destination.');
+    alert('Cette fonction fusionne les fichiers BIN multiples associés à un fichier CUE en un seul fichier BIN via une conversion CHD intermédiaire.');
+    showLogModal('Fusion BIN/CUE');
+    try {
+        const result = await window.electronAPI.mergeBinCue(source, destination);
+        updateProgress(100, 0, 'Fusion terminée');
+        const { mergedGames, skippedGames, errorCount } = result.summary;
+        if (errorCount > 0) {
+            alert(`Opération terminée avec ${errorCount} erreur(s). Consultez le journal pour plus de détails.`);
+        } else {
+            alert('Tous les jeux sont fusionnés, y\'a plus qu\'à jouer :D');
         }
     } catch (error) {
         appendLog(`Erreur: ${error.message}`);
