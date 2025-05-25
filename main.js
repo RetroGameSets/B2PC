@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
@@ -261,10 +261,16 @@ function sendProgress(totalProgress, message, currentFile = 0, totalFiles = 0, c
 }
 
 function createWindow() {
+    const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize;
+    const windowWidth = Math.min(1920, screenWidth * 0.8); // 80% de la largeur de l'écran, max 1280px
+    const windowHeight = Math.min(1080, screenHeight * 0.8); // 80% de la hauteur de l'écran, max 800px
+
     mainWindow = new BrowserWindow({
-        width: 1280,
-        height: 800,
-        resizable: true,
+        width: windowWidth,
+        height: windowHeight,
+        minWidth: 800, // Taille minimale raisonnable
+        minHeight: 600,
+        resizable: true, // Permet le redimensionnement
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,

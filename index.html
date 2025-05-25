@@ -11,19 +11,19 @@
         <div class="text-center mb-5">
             <img src="ressources/images/logo.png" alt="Logo" class="mx-auto mt-2">
             <h5 class="text-gray-500 font-semibold italic">Conversion et compression de jeux automatisée</h5><br>
-			<h5 class="text-gray-500 italic">Compatible : PS1 / PS2 / Dreamcast / PCEngineCD / SegaCD / Saturn / Xbox / Wii</h5>
+			<h5 class="text-gray-500 italic">Compatible : PS1 / PS2 / Dreamcast / PCEngineCD / SegaCD / Saturn / Xbox / Gamecube / Wii</h5>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
             <div>
-                <label class="block text-lg font-semibold mb-2">Dossier source (Fichiers .zip/.7z/.gz/.rar/.cue/.gdi/.iso/.chd):</label>
+                <label class="block text-lg font-semibold mb-2">Dossier source (Archives autorisées):</label>
                 <div class="flex">
                     <input type="text" id="sourceFolder" class="w-full p-2 border rounded" readonly>
                     <button id="selectSourceFolder" class="ml-2 bg-gray-500 text-white px-4 py-2 rounded">Parcourir</button>
                 </div>
             </div>
             <div>
-                <label class="block text-lg font-semibold mb-2">Dossier de destination des jeux convertis:</label>
+                <label class="block text-lg font-semibold mb-2">Dossier destination:</label>
                 <div class="flex">
                     <input type="text" id="destinationFolder" class="w-full p-2 border rounded" readonly>
                     <button id="selectDestinationFolder" class="ml-2 bg-gray-500 text-white px-4 py-2 rounded">Parcourir</button>
@@ -35,33 +35,33 @@
             <div>
                 <h2 class="text-xl font-bold mb-4">Conversion</h2>
                 <ul class="space-y-2">
-				    <li><button id="convertToChdv5"  class="w-full bg-green-500 text-white px-4 py-2 rounded">CUE/GDI/ISO to CHD v5</button></li>				 
-                    <li><button id="extractChd"      class="w-full bg-green-500 text-white px-4 py-2 rounded">Extract CHD</button></li>
-                    <li><button id="convertIsoToRvz" class="w-full bg-green-500 text-white px-4 py-2 rounded">Gamecube/Wii ISO to RVZ</button></li>
+				    <li><button id="convertToChdv5"  class="w-full bg-green-500 text-white px-4 py-2 rounded">CHD v5</button></li>				 
+                    <li><button id="extractChd"      class="w-full bg-green-500 text-white px-4 py-2 rounded">Extract CHD > BIN/CUE</button></li>					
                     <li><button id="mergeBinCue"     class="w-full bg-green-500 text-white px-4 py-2 rounded">Merge BIN/CUE</button></li>
-                    <li><button class="w-full bg-green-500 text-white px-4 py-2 rounded opacity-50 cursor-not-allowed">PS1 to PBP EBOOT</button></li>
-                    <li><button class="w-full bg-green-500 text-white px-4 py-2 rounded opacity-50 cursor-not-allowed">Wii ISO to WBFS</button></li>
+                    <li><button id="convertIsoToRvz" class="w-full bg-green-500 text-white px-4 py-2 rounded">GC/WII ISO to RVZ</button></li>
+                    <li><button class="w-full bg-green-500 text-white px-4 py-2 rounded opacity-50 cursor-not-allowed">WII ISO to WBFS</button></li>
+                    <li><button class="w-full bg-green-500 text-white px-4 py-2 rounded opacity-50 cursor-not-allowed">PS1 to PSP EBOOT</button></li>
                 </ul>
             </div>
             <div>
                 <h2 class="text-xl font-bold mb-4">Compression / Décompression</h2>
                 <ul class="space-y-2">
-                    <li><button class="w-full bg-yellow-500 text-white px-4 py-2 rounded opacity-50 cursor-not-allowed">Compress ALL</button></li>
-                    <li><button class="w-full bg-yellow-500 text-white px-4 py-2 rounded opacity-50 cursor-not-allowed">Decompress ALL</button></li>
+                    <li><button class="w-full bg-yellow-500 text-white px-4 py-2 rounded opacity-50 cursor-not-allowed">Compress</button></li>
+                    <li><button class="w-full bg-yellow-500 text-white px-4 py-2 rounded opacity-50 cursor-not-allowed">Decompress</button></li>
                 </ul>
             </div>
             <div>
                 <h2 class="text-xl font-bold mb-4">Patch</h2>
                 <ul class="space-y-2">
-                    <li><button id="patchXboxIso" class="w-full bg-purple-500 text-white px-4 py-2 rounded">XBOX ISO (xEmu)</button></li>
-                    <li><button class="w-full bg-purple-500 text-white px-4 py-2 rounded opacity-50 cursor-not-allowed">Autres patches</button></li>
+                    <li><button id="patchXboxIso" class="w-full bg-purple-500 text-white px-4 py-2 rounded">XBOX ISO (XEmu)</button></li>
+                    <li><button class="w-full bg-purple-500 text-white px-4 py-2 rounded opacity-50 cursor-not-allowed">Autres ..</button></li>
                 </ul>
             </div>
         </div>
 
         <div class="mb-6">
             <div id="logModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
-                <div class="bg-gray-800 p-6 rounded shadow-lg w-1/2 max-h-[80vh] flex flex-col text-white">
+				<div class="bg-gray-800 p-6 rounded shadow-lg w-[90vh] max-h-[90vh] flex flex-col text-white">
                     <h2 class="text-2xl font-bold mb-4">Journal des opérations</h2>
                     <div id="logContent" class="flex-grow overflow-y-auto mb-4 p-2 border border-gray-600" style="max-height: 60vh;"></div>
                     <div id="logs" class="hidden"></div>
