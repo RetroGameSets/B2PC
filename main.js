@@ -464,6 +464,120 @@ ipcMain.handle('convert-to-chdv5', async (_, source, dest) => {
     }
 });
 
+// ... (le reste de main.js reste inchangé, je montre uniquement les ajouts/modifications)
+
+// Ajouter après les autres handlers (par exemple, après 'convert-iso-to-rvz')
+ipcMain.handle('extract-chd', async (_, source, dest) => {
+    const startTime = Date.now();
+    const destination = await prepareDirectories(dest, 'Extracted_CHD');
+    let extractedGames = 0, skippedGames = 0, errorCount = 0;
+
+    // Charger chdman-js dynamiquement
+    let chdman;
+    try {
+        chdman = await import('chdman');
+        chdman = chdman.default || chdman; // Assurer la compatibilité avec export default
+        sendLog('chdman-js chargé avec succès');
+    } catch (error) {
+        sendLog(`Erreur lors du chargement de chdman-js: ${error.message}`);
+        throw new Error('Impossible de charger le module chdman-js');
+    }
+
+    try {
+        sendLog('Début de l\'extraction des fichiers CHD...');
+        sendLog(`Dossier source: ${source}`);
+        sendLog(`Dossier destination: ${destination}`);
+
+        // Récupérer les fichiers .chd dans le dossier source
+        const allChds = [];
+        const walkDir = async (dir) => {
+            const files = await fsPromises.readdir(dir, { withFileTypes: true });
+            for (const file of files) {
+                const fullPath = path.join(dir, file.name);
+                if (file.isDirectory()) {
+                    await walkDir(fullPath);
+                } else if (path.extname(file.name).toLowerCase() === '.chd') {
+                    allChds.push({ name: file.name, fullPath });
+                }
+            }
+        };
+        await walkDir(source);
+
+        sendLog(`Total des fichiers .chd trouvés : ${allChds.length}`);
+        if (allChds.length === 0) {
+            sendLog('Aucun fichier .chd trouvé pour l\'extraction. Assurez-vous que le dossier source contient des fichiers compatibles.');
+            return { summary: { extractedGames, skippedGames, errorCount } };
+        }
+
+        sendProgress(30, `Extraction des fichiers CHD`);
+        for (let i = 0; i < allChds.length; i++) {
+            const chd = allChds[i].name;
+            const fullChdPath = path.join(source, chd);
+            const outputCuePath = path.join(destination, path.basename(chd, path.extname(chd)) + '.cue');
+            const outputBinPath = path.join(destination, path.basename(chd, path.extname(chd)) + '.bin');
+            sendLog(`Début de l'extraction de ${chd}...`);
+            sendProgress(30 + (i / allChds.length) * 50, `Extraction des fichiers CHD`, i + 1, allChds.length);
+
+            // Vérifier si les fichiers de sortie existent déjà
+            if (fs.existsSync(outputCuePath) || fs.existsSync(outputBinPath)) {
+                sendLog(`Fichiers déjà extraits, ignoré : ${chd} -> ${outputCuePath}`);
+                skippedGames++;
+                continue;
+            }
+
+            // Utilisation de chdman-js pour l'extraction
+            try {
+                await chdman.extractCd({
+                    inputFilename: fullChdPath,
+                    outputFilename: outputCuePath,
+                    outputBinFilename: outputBinPath,
+                });
+
+                // Vérification post-extraction : les fichiers .cue et .bin doivent exister et avoir une taille > 0
+                if (fs.existsSync(outputCuePath) && fs.existsSync(outputBinPath)) {
+                    const cueStats = fs.statSync(outputCuePath);
+                    const binStats = fs.statSync(outputBinPath);
+                    if (cueStats.size > 0 && binStats.size > 0) {
+                        sendLog(`Extraction réussie : ${chd} -> ${outputCuePath} et ${outputBinPath}`);
+                        extractedGames++;
+                    } else {
+                        await fsPromises.unlink(outputCuePath).catch(err => sendLog(`Erreur lors de la suppression de ${outputCuePath}: ${err.message}`));
+                        await fsPromises.unlink(outputBinPath).catch(err => sendLog(`Erreur lors de la suppression de ${outputBinPath}: ${err.message}`));
+                        throw new Error('Fichiers .cue ou .bin générés mais vides ou invalides');
+                    }
+                } else {
+                    throw new Error('Fichiers .cue ou .bin non générés');
+                }
+            } catch (error) {
+                errorCount++;
+                sendLog(`Échec de l'extraction de ${chd}: ${error.message}`);
+                if (fs.existsSync(outputCuePath)) {
+                    await fsPromises.unlink(outputCuePath).catch(err => sendLog(`Erreur lors de la suppression de ${outputCuePath}: ${err.message}`));
+                    sendLog(`Fichier .cue supprimé : ${outputCuePath}`);
+                }
+                if (fs.existsSync(outputBinPath)) {
+                    await fsPromises.unlink(outputBinPath).catch(err => sendLog(`Erreur lors de la suppression de ${outputBinPath}: ${err.message}`));
+                    sendLog(`Fichier .bin supprimé : ${outputBinPath}`);
+                }
+            }
+        }
+
+        const duration = (Date.now() - startTime) / 1000;
+        sendLog(`Extraction CHD terminée en ${duration}s`);
+        sendLog(`Jeux extraits : ${extractedGames}`);
+        sendLog(`Jeux ignorés : ${skippedGames}`);
+        sendLog(`Erreurs : ${errorCount}`);
+
+        return { summary: { extractedGames, skippedGames, errorCount } };
+    } catch (error) {
+        sendLog(`Erreur lors de l'extraction CHD: ${error.message}`);
+        errorCount++;
+        throw error;
+    } finally {
+        sendProgress(100, `Terminé`);
+    }
+});
+
 
 ipcMain.handle('convert-iso-to-rvz', async (_, source, dest) => {
     const startTime = Date.now();
