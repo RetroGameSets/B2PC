@@ -111,33 +111,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
         });
     },
 
-    convertToPbp: async (source, destination) =>
-        await module.exports.runCommand('pbp_eboot.bat', source, destination, 'Attention, il se peut que certaines pistes audio soient perdues pendant la conversion'),
-
-    mergeBinCue: async (source, destination) =>
-        await module.exports.runCommand('merge_bin.bat', source, destination, 'Cette fonction rassemblera tous les .bin/.cue en un seul fichier'),
-
-    extractChdToBin: async (source, destination) =>
-        await module.exports.runCommand('chd_extract.bat', source, destination, 'Extraction de CHD vers bin/cue - résultats non garantis'),
-
-    convertWiiToWbfs: async (source, destination) =>
-        await module.exports.runCommand('wii_wbfs.bat', source, destination, 'Conversion WII ISO vers WBFS'),
-
-    zipAllRoms: async (source, destination) =>
-        await module.exports.runCommand('zip.bat', source, destination, 'Compression des jeux en ZIP individuels'),
-
-    runUpdate: async () => {
-        return new Promise((resolve, reject) => {
-            const child = spawn('cmd', ['/c', 'update.bat']);
-            child.on('error', reject);
-            child.on('close', (code) => (code !== 0) ? reject(new Error(`Code de sortie ${code}`)) : resolve());
-        });
-    },
-
     getLogDir: () => logDir, // Exposer logDir
 
     getAppVersion: () => appVersion // Exposer la version de l'application
 });
+
 // Gérer la confirmation de nettoyage dans preload.js
 ipcRenderer.on('request-cleanup-confirmation', (event, cleanupChannel) => {
     dialog.showMessageBox({
@@ -145,8 +123,8 @@ ipcRenderer.on('request-cleanup-confirmation', (event, cleanupChannel) => {
         buttons: ['Oui', 'Non'],
         defaultId: 1, // "Non" par défaut
         title: 'Confirmation de suppression',
-        message: 'Voulez-vous supprimer les fichiers ISO source après la conversion ?',
-        detail: 'Les fichiers .iso dans le dossier source seront supprimés si vous choisissez "Oui".'
+        message: 'Voulez-vous supprimer les fichiers source après la conversion ?',
+        detail: 'Les fichiers .iso, .cue, .bin, .gdi, .chd dans le dossier source seront supprimés si vous choisissez "Oui".'
     }).then((response) => {
         const shouldDelete = response.response === 0;
         ipcRenderer.send(cleanupChannel, shouldDelete);

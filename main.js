@@ -14,6 +14,7 @@ autoUpdater.logger.transports.file.level = 'info';
 initialize();
 let mainWindow;
 
+
 // Ajuster le chemin des ressources en fonction du contexte (packagé ou dev)
 const isPackaged = app.isPackaged;
 const resourcesPath = isPackaged
@@ -23,6 +24,8 @@ const resourcesPath = isPackaged
 const tools = {
     sevenZip: path.join(resourcesPath, '7za.exe'),
     xiso: path.join(resourcesPath, 'xiso.exe'),
+	chdman: path.join(resourcesPath, 'chdman.exe'), 
+    dolphinTool: path.join(resourcesPath, 'dolphin-tool.exe')
 };
 
 async function validateTools() {
@@ -144,14 +147,19 @@ async function cleanupFiles(sourceDir, extensionsToRemove) {
     }
 }
 
-async function runTool(toolPath, args, workingDir, fileName) {
+
+
+
+
+
+
+async function runTool(toolPath, args, workingDir, fileName, totalFiles, fileIndex, operation) {
     return new Promise((resolve, reject) => {
-        sendLog(`Exécution de ${path.basename(toolPath)} ${args.join(' ')}`);
+       // sendLog(`Exécution de ${path.basename(toolPath)} ${args.join(' ')}`);
         const tool = spawn(toolPath, args, { cwd: workingDir });
         let stdoutOutput = '';
         let errorOutput = '';
-        let lastLoggedPercentage = -1;
-        let hasCriticalError = false; // Pour suivre les erreurs critiques
+        let hasCriticalError = false;
 
         const timeout = setTimeout(() => {
             tool.kill();
@@ -172,9 +180,44 @@ async function runTool(toolPath, args, workingDir, fileName) {
             const lines = data.toString().split('\n').filter(Boolean);
             for (const line of lines) {
                 errorOutput += line + '\n';
+                console.log(`[DEBUG] stderr: ${line}`); // Débogage temporaire
 
-                // Gestion spéciale pour DolphinTool.exe (erreur critique)
-                if (path.basename(toolPath).toLowerCase() === 'dolphintool.exe' && line.includes('The input file is not a GC/Wii disc image')) {
+                // Gestion des messages de progression pour chdman.exe (createcd ou extractcd)
+                if (path.basename(toolPath).toLowerCase() === 'chdman.exe') {
+                    // Tester plusieurs motifs possibles
+                    const percentageMatch = line.match(/(\w+,\s*(\d+\.\d+)%\s*complete)/i);
+                    if (percentageMatch && percentageMatch[2]) {
+                        const percentage = parseFloat(percentageMatch[2]);
+                        if (totalFiles > 0 && fileIndex >= 0) {
+                            const baseProgress = 30 + (fileIndex / totalFiles) * 50;
+                            const fileProgress = (percentage / 100) * (50 / totalFiles);
+                            sendProgress(baseProgress + fileProgress, operation, fileIndex + 1, totalFiles, percentage);
+                            //console.log(`[DEBUG] Progression détectée: total=${baseProgress + fileProgress}%, fichier=${percentage}%`);
+                        } else {
+                            sendLog(`Erreur: Paramètres invalides - totalFiles: ${totalFiles}, fileIndex: ${fileIndex}`);
+                        }
+                    }
+                    return; // Ne pas logger ces messages
+                }
+
+                // Gestion des messages de progression pour dolphin-tool.exe
+                if (path.basename(toolPath).toLowerCase() === 'dolphin-tool.exe' && line.includes('Compressing,')) {
+                    const percentageMatch = line.match(/Compressing,\s*(\d+\.\d+)%\s*complete/);
+                    if (percentageMatch) {
+                        const percentage = parseFloat(percentageMatch[1]);
+                        if (totalFiles > 0 && fileIndex >= 0) {
+                            const baseProgress = 30 + (fileIndex / totalFiles) * 50;
+                            const fileProgress = (percentage / 100) * (50 / totalFiles);
+                            sendProgress(baseProgress + fileProgress, operation, fileIndex + 1, totalFiles, percentage);
+                        } else {
+                            sendLog(`Erreur: Paramètres invalides - totalFiles: ${totalFiles}, fileIndex: ${fileIndex}`);
+                        }
+                    }
+                    return; // Ne pas logger ces messages
+                }
+
+                // Gestion des erreurs critiques pour dolphin-tool.exe
+                if (path.basename(toolPath).toLowerCase() === 'dolphin-tool.exe' && line.includes('The input file is not a GC/Wii disc image')) {
                     hasCriticalError = true;
                     sendLog(`${path.basename(toolPath)} [${fileName}] Erreur critique: ${line}`);
                 }
@@ -188,7 +231,7 @@ async function runTool(toolPath, args, workingDir, fileName) {
         tool.on('close', code => {
             clearTimeout(timeout);
             if (code === 0 && !hasCriticalError) {
-                sendLog(`Traitement terminé : ${fileName}`);
+                //sendLog(`Traitement terminé : ${fileName}`);
                 resolve(stdoutOutput);
             } else {
                 const errorMsg = hasCriticalError ? 'Fichier incompatible : non reconnu comme une image de disque GC/Wii' : (errorOutput || `Échec avec code ${code}`);
@@ -204,6 +247,11 @@ async function runTool(toolPath, args, workingDir, fileName) {
     });
 }
 
+
+
+
+
+
 function sendLog(msg) {
     if (mainWindow && msg) {
         const timestamp = new Date().toLocaleTimeString('fr-FR', { hour12: false });
@@ -215,13 +263,14 @@ function sendLog(msg) {
     }
 }
 
-function sendProgress(percent, message, current, total) {
-    if (mainWindow) {
-        console.log(`Envoi progression: ${percent}% - ${message} (${current}/${total})`);
-        mainWindow.webContents.send('progress-update', { percent, message, current, total });
-    }
+function sendProgress(totalProgress, message, currentFile = 0, totalFiles = 0, currentFileProgress = 0) {
+    const progressMessage = totalFiles > 0 ? `${message} (${currentFile}/${totalFiles})` : message;
+    mainWindow.webContents.send('progress-update', {
+        totalProgress: Math.round(totalProgress * 10) / 10,
+        currentFileProgress: Math.round(currentFileProgress * 10) / 10,
+        message: progressMessage
+    });
 }
-
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -239,6 +288,7 @@ function createWindow() {
     enable(mainWindow.webContents);
     mainWindow.loadFile('index.html');
     mainWindow.setMenu(null);
+	// mainWindow.webContents.openDevTools();
 
     const imagesPath = path.join(__dirname, 'ressources', 'images');
     if (!fs.existsSync(resourcesPath)) {
@@ -357,7 +407,7 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
             convertedGames++;
         }
 
-        await cleanupFiles(source, ['.iso', '.old']);
+        
         if (fs.existsSync(path.join(destination, 'xiso.exe'))) {
             await fsPromises.unlink(path.join(destination, 'xiso.exe')).catch(err => sendLog(`Erreur lors de la suppression de xiso.exe: ${err.message}`));
             sendLog(`xiso.exe supprimé de ${destination}`);
@@ -370,6 +420,24 @@ ipcMain.handle('patch-xbox-iso', async (_, source, dest) => {
         sendLog(`Archives ignorées : ${ignoredArchives}`);
         sendLog(`Erreurs : ${errorCount}`);
 
+		sendLog('Demande de confirmation pour le nettoyage des fichiers source...');
+        const shouldCleanup = await new Promise((resolve) => {
+            const cleanupChannel = 'confirm-cleanup';
+            ipcMain.once(cleanupChannel, (_, shouldDelete) => {
+                resolve(shouldDelete);
+            });
+            mainWindow.webContents.send('request-cleanup-confirmation', cleanupChannel);
+        });
+
+        if (shouldCleanup) {
+            sendLog('Nettoyage des fichiers extraits...');
+            sendProgress(80, `Nettoyage`);
+            await cleanupFiles(source, ['.iso' ,'.old']);
+            sendLog('Nettoyage terminé.');
+        } else {
+            sendLog('Nettoyage annulé par l’utilisateur.');
+        }
+		
         return { summary: { convertedGames, optimizedGames, ignoredArchives, errorCount } };
     } catch (error) {
         sendLog(`Erreur lors du patch Xbox: ${error.message}`);
@@ -385,22 +453,11 @@ ipcMain.handle('convert-to-chdv5', async (_, source, dest) => {
     const destination = await prepareDirectories(dest, 'CHD');
     let convertedGames = 0, skippedGames = 0, errorCount = 0;
 
-    // Charger chdman-js dynamiquement
-    let chdman;
     try {
-        chdman = await import('chdman');
-        chdman = chdman.default || chdman; // Assurer la compatibilité avec export default
-        sendLog('chdman-js chargé avec succès');
-    } catch (error) {
-        sendLog(`Erreur lors du chargement de chdman-js: ${error.message}`);
-        throw new Error('Impossible de charger le module chdman-js');
-    }
-
-    try {
-        sendLog('Début de la conversion en CHD...');
+       // sendLog('Début de la conversion en CHD...');
         sendLog(`Dossier source: ${source}`);
         sendLog(`Dossier destination: ${destination}`);
-        await validateTools(); // Vérifie les outils restants (sevenZip, xiso)
+        await validateTools();
 
         const allInputs = await extractArchives(source, tools.sevenZip, ['.7z', '.zip', '.gz', '.rar'], ['.cue', '.gdi', '.iso']);
         sendLog(`Total des fichiers .cue/.gdi/.iso trouvés après extraction : ${allInputs.length}`);
@@ -409,22 +466,31 @@ ipcMain.handle('convert-to-chdv5', async (_, source, dest) => {
             return { summary: { convertedGames, skippedGames, errorCount } };
         }
 
-        sendProgress(30, `Conversion en CHD`);
+        sendProgress(30, `Conversion en CHD`, 0, allInputs.length, 0);
         for (let i = 0; i < allInputs.length; i++) {
             const input = allInputs[i].name;
             const fullInputPath = path.join(source, input);
             const outputChdPath = path.join(destination, path.basename(input, path.extname(input)) + '.chd');
-            sendLog(`Début de la conversion de ${input}...`);
-            sendProgress(30 + (i / allInputs.length) * 50, `Conversion en CHD`, i + 1, allInputs.length);
+            sendLog(`Conversion de ${input}...`);
+            sendProgress(30 + (i / allInputs.length) * 50, `Conversion en CHD`, i + 1, allInputs.length, 0);
 
-            // Utilisation de chdman-js pour la conversion
+            if (fs.existsSync(outputChdPath)) {
+                sendLog(`Fichier déjà converti, ignoré : ${input} -> ${outputChdPath}`);
+                skippedGames++;
+                continue;
+            }
+
             try {
-                await chdman.createCd({
-                    inputFilename: fullInputPath,
-                    outputFilename: outputChdPath,
-                });
+                await fsPromises.access(destination, fs.constants.W_OK);
+            } catch (error) {
+                sendLog(`Erreur: Pas de permissions d'écriture dans ${destination}. Exécutez en tant qu'administrateur ou choisissez un autre dossier.`);
+                throw new Error('Permissions insuffisantes pour écrire dans le dossier de destination');
+            }
 
-                // Vérification post-conversion : fichier .chd doit exister et avoir une taille > 0
+            try {
+                const args = ['createcd', '-i', fullInputPath, '-o', outputChdPath];
+                await runTool(tools.chdman, args, destination, input, allInputs.length, i, 'Conversion en CHD');
+
                 if (fs.existsSync(outputChdPath)) {
                     const stats = fs.statSync(outputChdPath);
                     if (stats.size > 0) {
@@ -439,56 +505,56 @@ ipcMain.handle('convert-to-chdv5', async (_, source, dest) => {
                 }
             } catch (error) {
                 errorCount++;
-                sendLog(`Échec de la conversion de ${input}: ${error.message}`);
+                sendLog(`Échec de la conversion de ${input}: ${error.message || error.stack || 'Aucune information disponible'}`);
                 if (fs.existsSync(outputChdPath)) {
                     await fsPromises.unlink(outputChdPath).catch(err => sendLog(`Erreur lors de la suppression de ${outputChdPath}: ${err.message}`));
                     sendLog(`Fichier .chd supprimé : ${outputChdPath}`);
                 }
             }
         }
-
-        await cleanupFiles(source, ['.cue', '.gdi', '.iso']);
         const duration = (Date.now() - startTime) / 1000;
         sendLog(`Conversion CHD terminée en ${duration}s`);
         sendLog(`Jeux convertis : ${convertedGames}`);
         sendLog(`Jeux ignorés : ${skippedGames}`);
         sendLog(`Erreurs : ${errorCount}`);
+		sendLog('Demande de confirmation pour le nettoyage des fichiers source...');
+        
+		const shouldCleanup = await new Promise((resolve) => {
+            const cleanupChannel = 'confirm-cleanup';
+            ipcMain.once(cleanupChannel, (_, shouldDelete) => {
+                resolve(shouldDelete);
+            });
+            mainWindow.webContents.send('request-cleanup-confirmation', cleanupChannel);
+        });
 
+        if (shouldCleanup) {
+            sendLog('Nettoyage des fichiers extraits...');
+            sendProgress(80, `Nettoyage`);
+            await cleanupFiles(source, ['.iso', '.cue', '.bin', '.gdi']);
+            sendLog('Nettoyage terminé.');
+        } else {
+            sendLog('Nettoyage annulé par l’utilisateur.');
+        }
         return { summary: { convertedGames, skippedGames, errorCount } };
     } catch (error) {
-        sendLog(`Erreur lors de la conversion CHD: ${error.message}`);
+        sendLog(`Erreur lors de la conversion CHD: ${error.message || error.stack || 'Aucune information disponible'}`);
         errorCount++;
         throw error;
     } finally {
-        sendProgress(100, `Terminé`);
+        sendProgress(100, `Terminé`, 0, 0, 0);
     }
 });
 
-// ... (le reste de main.js reste inchangé, je montre uniquement les ajouts/modifications)
-
-// Ajouter après les autres handlers (par exemple, après 'convert-iso-to-rvz')
 ipcMain.handle('extract-chd', async (_, source, dest) => {
     const startTime = Date.now();
     const destination = await prepareDirectories(dest, 'Extracted_CHD');
     let extractedGames = 0, skippedGames = 0, errorCount = 0;
 
-    // Charger chdman-js dynamiquement
-    let chdman;
     try {
-        chdman = await import('chdman');
-        chdman = chdman.default || chdman; // Assurer la compatibilité avec export default
-        sendLog('chdman-js chargé avec succès');
-    } catch (error) {
-        sendLog(`Erreur lors du chargement de chdman-js: ${error.message}`);
-        throw new Error('Impossible de charger le module chdman-js');
-    }
-
-    try {
-        sendLog('Début de l\'extraction des fichiers CHD...');
+        //sendLog('Début de l\'extraction des fichiers CHD...');
         sendLog(`Dossier source: ${source}`);
         sendLog(`Dossier destination: ${destination}`);
 
-        // Récupérer les fichiers .chd dans le dossier source
         const allChds = [];
         const walkDir = async (dir) => {
             const files = await fsPromises.readdir(dir, { withFileTypes: true });
@@ -509,31 +575,32 @@ ipcMain.handle('extract-chd', async (_, source, dest) => {
             return { summary: { extractedGames, skippedGames, errorCount } };
         }
 
-        sendProgress(30, `Extraction des fichiers CHD`);
+        try {
+            await fsPromises.access(destination, fs.constants.W_OK);
+        } catch (error) {
+            sendLog(`Erreur: Pas de permissions d'écriture dans ${destination}. Exécutez en tant qu'administrateur ou choisissez un autre dossier.`);
+            throw new Error('Permissions insuffisantes pour écrire dans le dossier de destination');
+        }
+
+        sendProgress(30, `Extraction des fichiers CHD`, 0, allChds.length, 0);
         for (let i = 0; i < allChds.length; i++) {
             const chd = allChds[i].name;
             const fullChdPath = path.join(source, chd);
             const outputCuePath = path.join(destination, path.basename(chd, path.extname(chd)) + '.cue');
             const outputBinPath = path.join(destination, path.basename(chd, path.extname(chd)) + '.bin');
-            sendLog(`Début de l'extraction de ${chd}...`);
-            sendProgress(30 + (i / allChds.length) * 50, `Extraction des fichiers CHD`, i + 1, allChds.length);
+            sendLog(`Extraction de ${chd}...`);
+            sendProgress(30 + (i / allChds.length) * 50, `Extraction des fichiers CHD`, i + 1, allChds.length, 0);
 
-            // Vérifier si les fichiers de sortie existent déjà
             if (fs.existsSync(outputCuePath) || fs.existsSync(outputBinPath)) {
                 sendLog(`Fichiers déjà extraits, ignoré : ${chd} -> ${outputCuePath}`);
                 skippedGames++;
                 continue;
             }
 
-            // Utilisation de chdman-js pour l'extraction
             try {
-                await chdman.extractCd({
-                    inputFilename: fullChdPath,
-                    outputFilename: outputCuePath,
-                    outputBinFilename: outputBinPath,
-                });
+                const args = ['extractcd', '-i', fullChdPath, '-o', outputCuePath, '-ob', outputBinPath];
+                await runTool(tools.chdman, args, destination, chd, allChds.length, i, 'Extraction des fichiers CHD');
 
-                // Vérification post-extraction : les fichiers .cue et .bin doivent exister et avoir une taille > 0
                 if (fs.existsSync(outputCuePath) && fs.existsSync(outputBinPath)) {
                     const cueStats = fs.statSync(outputCuePath);
                     const binStats = fs.statSync(outputBinPath);
@@ -550,7 +617,7 @@ ipcMain.handle('extract-chd', async (_, source, dest) => {
                 }
             } catch (error) {
                 errorCount++;
-                sendLog(`Échec de l'extraction de ${chd}: ${error.message}`);
+                sendLog(`Échec de l'extraction de ${chd}: ${error.message || error.stack || 'Aucune information disponible'}`);
                 if (fs.existsSync(outputCuePath)) {
                     await fsPromises.unlink(outputCuePath).catch(err => sendLog(`Erreur lors de la suppression de ${outputCuePath}: ${err.message}`));
                     sendLog(`Fichier .cue supprimé : ${outputCuePath}`);
@@ -567,43 +634,71 @@ ipcMain.handle('extract-chd', async (_, source, dest) => {
         sendLog(`Jeux extraits : ${extractedGames}`);
         sendLog(`Jeux ignorés : ${skippedGames}`);
         sendLog(`Erreurs : ${errorCount}`);
+		sendLog('Demande de confirmation pour le nettoyage des fichiers source...');
+        const shouldCleanup = await new Promise((resolve) => {
+            const cleanupChannel = 'confirm-cleanup';
+            ipcMain.once(cleanupChannel, (_, shouldDelete) => {
+                resolve(shouldDelete);
+            });
+            mainWindow.webContents.send('request-cleanup-confirmation', cleanupChannel);
+        });
 
+        if (shouldCleanup) {
+            sendLog('Nettoyage des fichiers extraits...');
+            sendProgress(80, `Nettoyage`);
+            await cleanupFiles(source, ['.chd']);
+            sendLog('Nettoyage terminé.');
+        } else {
+            sendLog('Nettoyage annulé par l’utilisateur.');
+        }
         return { summary: { extractedGames, skippedGames, errorCount } };
     } catch (error) {
-        sendLog(`Erreur lors de l'extraction CHD: ${error.message}`);
+        sendLog(`Erreur lors de l'extraction CHD: ${error.message || error.stack || 'Aucune information disponible'}`);
         errorCount++;
         throw error;
     } finally {
-        sendProgress(100, `Terminé`);
+        sendProgress(100, `Terminé`, 0, 0, 0);
     }
 });
 
+async function checkIsoCompatibility(isoPath, dolphinToolPath) {
+    return new Promise((resolve, reject) => {
+        sendLog(`Vérification de la compatibilité de ${path.basename(isoPath)} avec DolphinTool...`);
+        const headerProcess = spawn(dolphinToolPath, ['header', '-i', isoPath]);
+        let output = '';
+
+        headerProcess.stdout.on('data', data => {
+            output += data.toString();
+        });
+
+        headerProcess.stderr.on('data', data => {
+            sendLog(`DolphinTool header [${path.basename(isoPath)}] Erreur: ${data}`);
+        });
+
+        headerProcess.on('close', code => {
+            if (code === 0 && output.trim().length > 0) {
+                sendLog(`ISO compatible : ${path.basename(isoPath)}`);
+                resolve(true);
+            } else {
+                sendLog(`ISO incompatible : ${path.basename(isoPath)} (pas une image GameCube/Wii)`);
+                resolve(false);
+            }
+        });
+
+        headerProcess.on('error', err => reject(err));
+    });
+}
 
 ipcMain.handle('convert-iso-to-rvz', async (_, source, dest) => {
     const startTime = Date.now();
     const destination = await prepareDirectories(dest, 'RVZ');
     let convertedGames = 0, skippedGames = 0, errorCount = 0;
 
-    let dolphinTool;
-    try {
-        const module = await import('dolphin-tool');
-        dolphinTool = module.default || module;
-        if (!dolphinTool.convert || !dolphinTool.header) {
-            throw new Error('Les fonctions convert ou header sont manquantes dans dolphin-tool');
-        }
-        sendLog('dolphin-tool chargé avec succès');
-    } catch (error) {
-        sendLog(`Erreur lors du chargement de dolphin-tool: ${error.message}`);
-        throw new Error('Impossible de charger le module dolphin-tool');
-    }
-
-    const { ContainerFormat, CompressionMethodWiaRvz } = await import('dolphin-tool');
-
     try {
         sendLog('Début de la conversion en RVZ...');
         sendLog(`Dossier source: ${source}`);
         sendLog(`Dossier destination: ${destination}`);
-        await validateTools(); // Vérifie les outils restants (sevenZip, xiso)
+        await validateTools();
 
         const allIsos = await extractArchives(source, tools.sevenZip, ['.7z', '.zip', '.gz', '.rar'], ['.iso']);
         sendLog(`Total des fichiers .iso trouvés après extraction : ${allIsos.length}`);
@@ -612,7 +707,15 @@ ipcMain.handle('convert-iso-to-rvz', async (_, source, dest) => {
             return { summary: { convertedGames, skippedGames, errorCount } };
         }
 
-        sendProgress(30, `Conversion en RVZ`);
+        // Vérifier les permissions d'écriture
+        try {
+            await fsPromises.access(destination, fs.constants.W_OK);
+        } catch (error) {
+            sendLog(`Erreur: Pas de permissions d'écriture dans ${destination}. Exécutez en tant qu'administrateur ou choisissez un autre dossier.`);
+            throw new Error('Permissions insuffisantes pour écrire dans le dossier de destination');
+        }
+
+        sendProgress(30, `Conversion en RVZ`, 0, allIsos.length);
         for (let i = 0; i < allIsos.length; i++) {
             const iso = allIsos[i].name;
             const fullIsoPath = path.join(source, iso);
@@ -626,34 +729,27 @@ ipcMain.handle('convert-iso-to-rvz', async (_, source, dest) => {
             }
 
             // Vérification de la compatibilité
-            let headerInfo;
-            try {
-                headerInfo = await dolphinTool.header({ inputFilename: fullIsoPath });
-            } catch (error) {
-                sendLog(`Erreur lors de la vérification de ${iso}: ${error.message}`);
+            const isCompatible = await checkIsoCompatibility(fullIsoPath, tools.dolphinTool);
+            if (!isCompatible) {
                 errorCount++;
-                sendProgress(30 + (i / allIsos.length) * 50, `Conversion en RVZ`, i + 1, allIsos.length);
-                continue;
-            }
-            if (!headerInfo || Object.keys(headerInfo).length === 0) {
-                errorCount++;
-                sendLog(`Conversion ignorée pour ${iso} : incompatible avec RVZ (pas une image GameCube/Wii)`);
+                sendLog(`Conversion ignorée pour ${iso} : incompatible avec RVZ`);
                 sendProgress(30 + (i / allIsos.length) * 50, `Conversion en RVZ`, i + 1, allIsos.length);
                 continue;
             }
 
             sendProgress(30 + (i / allIsos.length) * 50, `Conversion en RVZ`, i + 1, allIsos.length);
             try {
-                await dolphinTool.convert({
-                    inputFilename: fullIsoPath,
-                    outputFilename: outputRvzPath,
-                    containerFormat: ContainerFormat.RVZ,
-                    blockSize: 131_072,
-                    compressionMethod: CompressionMethodWiaRvz.ZSTD,
-                    compressionLevel: 5,
-                });
+                const args = [
+                    'convert',
+                    '-i', fullIsoPath,
+                    '-o', outputRvzPath,
+                    '-f', 'rvz',
+                    '-b', '131072',
+                    '-c', 'zstd',
+                    '-l', '5'
+                ];
+                await runTool(tools.dolphinTool, args, destination, iso, allIsos.length, i, 'Conversion en RVZ');
 
-                // Vérification post-conversion : fichier .rvz doit exister et avoir une taille > 0
                 if (fs.existsSync(outputRvzPath)) {
                     const stats = fs.statSync(outputRvzPath);
                     if (stats.size > 0) {
@@ -668,7 +764,7 @@ ipcMain.handle('convert-iso-to-rvz', async (_, source, dest) => {
                 }
             } catch (error) {
                 errorCount++;
-                sendLog(`Échec de la conversion de ${iso}: ${error.message}`);
+                sendLog(`Échec de la conversion de ${iso}: ${error.message || error.stack || 'Aucune information disponible'}`);
                 if (fs.existsSync(outputRvzPath)) {
                     await fsPromises.unlink(outputRvzPath).catch(err => sendLog(`Erreur lors de la suppression de ${outputRvzPath}: ${err.message}`));
                     sendLog(`Fichier .rvz supprimé : ${outputRvzPath}`);
@@ -682,7 +778,6 @@ ipcMain.handle('convert-iso-to-rvz', async (_, source, dest) => {
         sendLog(`Jeux ignorés : ${skippedGames}`);
         sendLog(`Erreurs : ${errorCount}`);
 
-        // Demander confirmation pour nettoyer les fichiers
         sendLog('Demande de confirmation pour le nettoyage des fichiers source...');
         const shouldCleanup = await new Promise((resolve) => {
             const cleanupChannel = 'confirm-cleanup';
@@ -703,7 +798,7 @@ ipcMain.handle('convert-iso-to-rvz', async (_, source, dest) => {
 
         return { summary: { convertedGames, skippedGames, errorCount } };
     } catch (error) {
-        sendLog(`Erreur lors de la conversion RVZ: ${error.message}`);
+        sendLog(`Erreur lors de la conversion RVZ: ${error.message || error.stack || 'Aucune information disponible'}`);
         errorCount++;
         throw error;
     } finally {

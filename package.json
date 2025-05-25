@@ -1,6 +1,6 @@
 {
   "name": "B2PC",
-  "version": "3.2.1-beta",
+  "version": "3.1.2-beta",
   "description": "Batch Retro Games Converter by RetroGameSets.fr",
   "main": "main.js",
   "author": "RetroGameSets.fr",
@@ -12,8 +12,6 @@
   },
   "dependencies": {
     "@electron/remote": "^2.0.8",
-    "chdman": "^0.277.0",
-    "dolphin-tool": "^0.2503.1",
     "electron-log": "^5.2.0",
     "electron-updater": "^6.3.4",
     "node-7z": "^3.0.0"
@@ -24,8 +22,8 @@
     "@electron-forge/plugin-fuses": "^7.8.1",
     "@electron/fuses": "^1.8.0",
     "autoprefixer": "^10.4.20",
-    "electron": "^22.3.27",
-    "electron-builder": "^26.0.12",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.13.3",
     "postcss": "^8.4.31",
     "tailwindcss": "^3.4.1"
   }

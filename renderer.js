@@ -42,9 +42,10 @@ window.electronAPI.onLogMessage((message) => {
             hasExtractionError = true; // Marquer une erreur si présente
         } else if (
             message.includes('Conversion réussie') ||
+            message.includes('Traitement terminé') ||
             message.includes('Extraction terminée') ||
             message.includes('Nettoyage terminé') ||
-            message.includes('dolphin-tool chargé avec succès') ||
+            message.includes('Extraction réussie') ||
             (message.includes('Compression complete') && message.includes('final ratio'))
         ) {
             messageClass = 'bg-green-100 text-green-800';
@@ -106,23 +107,18 @@ window.electronAPI.onLogMessage((message) => {
 });
 
 // Écouter les mises à jour de progression
-window.electronAPI.onProgressUpdate(({ percent, message, current, total }) => {
-    updateProgress(percent, message, current, total);
+window.electronAPI.onProgressUpdate((data) => {
+    updateProgress(data.totalProgress, data.currentFileProgress, data.message);
 });
 
-// Écouter la demande de confirmation pour le nettoyage
-window.electronAPI.onRequestCleanupConfirmation((event, cleanupChannel) => {
-    console.log('Demande de confirmation reçue dans renderer:', cleanupChannel); // Débogage
-    // La logique de dialog.showMessageBox est maintenant dans preload.js
-    // Pas besoin d'ajouter de code ici, preload.js gère tout
-});
+
 
 // Mettre à jour la version dans le footer
 window.addEventListener('DOMContentLoaded', () => {
     const versionElement = document.querySelector('footer');
     if (versionElement) {
         const appVersion = window.electronAPI.getAppVersion();
-        versionElement.innerHTML = `RetroGameSets 2025 // Version ${appVersion} // <a href="#" class="text-blue-500">AIDE - INSTRUCTIONS</a>`;
+        versionElement.innerHTML = `RetroGameSets 2025 // Version ${appVersion}`;
     } else {
         console.error('Élément footer non trouvé');
     }
@@ -170,7 +166,7 @@ function showLogModal(functionName) {
             hasExtractionError = false; // Réinitialiser l'état d'erreur d'extraction
             logContent.classList.add('bg-gray-100', 'max-h-96', 'overflow-y-auto', 'p-4', 'rounded-lg');
         }
-        updateProgress(0, 'Initialisation...');
+        updateProgress(0, 0, 'Initialisation...');
     } else {
         console.error('Modal logModal non trouvé');
     }
@@ -236,19 +232,37 @@ function appendSummaryTable() {
     }
 }
 
-function updateProgress(percentage, stepMessage = 'Progression :', currentStep = 0, totalSteps = 0) {
-    const progressBar = document.getElementById('progressBar');
-    const progressText = document.getElementById('progressText');
-    const progressLabel = document.getElementById('progressLabel');
-    if (progressBar && progressText && progressLabel) {
-        percentage = Math.min(100, Math.max(0, percentage));
-        progressBar.style.width = `${percentage}%`;
-        progressText.textContent = `${Math.round(percentage)}%`;
-        progressLabel.textContent = totalSteps > 0 ? `${stepMessage} (${currentStep}/${totalSteps})` : stepMessage;
-        console.log(`Reçu progression: ${stepMessage} (${currentStep}/${totalSteps}) - ${percentage}%`);
+function updateProgress(totalProgress, currentFileProgress, message) {
+    const totalProgressBar = document.getElementById('totalProgressBar');
+    const totalProgressText = document.getElementById('totalProgressText');
+    const totalProgressLabel = document.getElementById('totalProgressLabel');
+    const currentFileProgressBar = document.getElementById('currentFileProgressBar');
+    const currentFileProgressLabel = document.getElementById('currentFileProgressLabel');
+
+    // Mettre à jour la progression totale
+    if (totalProgressBar && totalProgressText && totalProgressLabel) {
+        totalProgress = Math.min(100, Math.max(0, totalProgress));
+        totalProgressBar.style.width = `${totalProgress}%`;
+        totalProgressText.textContent = `${Math.round(totalProgress)}%`;
+        totalProgressLabel.textContent = `Progression totale : ${message}`;
     } else {
-        console.error('Un élément de progression est manquant');
+        console.error('Un élément de progression totale est manquant');
     }
+
+    // Mettre à jour la progression du fichier en cours
+    if (currentFileProgressBar && currentFileProgressLabel) {
+        currentFileProgress = Math.min(100, Math.max(0, currentFileProgress));
+        currentFileProgressBar.style.width = `${currentFileProgress}%`;
+        if (currentFileProgress > 0) {
+            currentFileProgressLabel.textContent = `Progression fichier en cours : ${Math.round(currentFileProgress)}%`;
+        } else {
+            currentFileProgressLabel.textContent = `Progression fichier en cours : ${message}`;
+        }
+    } else {
+        console.error('Un élément de progression du fichier en cours est manquant');
+    }
+
+    console.log(`Reçu progression: ${message} - Total: ${totalProgress}%, Fichier: ${currentFileProgress}%`);
 }
 
 async function openLogFolder() {
@@ -268,7 +282,7 @@ async function patchXboxIso() {
     showLogModal('Patch-XBOX-ISO-XEMU');
     try {
         const result = await window.electronAPI.patchXboxIso(source, destination);
-        updateProgress(100, 'Conversion terminée');
+        updateProgress(100, 0, 'Conversion terminée');
         const { convertedGames, optimizedGames, ignoredArchives, errorCount } = result.summary;
         if (errorCount > 0) {
             alert(`Opération terminée avec ${errorCount} erreur(s). Consultez le journal pour plus de détails.`);
@@ -288,7 +302,7 @@ async function convertToChdv5() {
     showLogModal('Conversion en CHDv5');
     try {
         const result = await window.electronAPI.convertToChdv5(source, destination);
-        updateProgress(100, 'Conversion terminée');
+        updateProgress(100, 0, 'Conversion terminée');
         const { convertedGames, skippedGames, errorCount } = result.summary;
         if (errorCount > 0) {
             alert(`Opération terminée avec ${errorCount} erreur(s). Consultez le journal pour plus de détails.`);
@@ -308,7 +322,7 @@ async function extractChd() {
     showLogModal('Extraction CHD');
     try {
         const result = await window.electronAPI.extractChd(source, destination);
-        updateProgress(100, 'Extraction terminée');
+        updateProgress(100, 0, 'Extraction terminée');
         const { extractedGames, skippedGames, errorCount } = result.summary;
         if (errorCount > 0) {
             alert(`Opération terminée avec ${errorCount} erreur(s). Consultez le journal pour plus de détails.`);
@@ -329,28 +343,13 @@ async function convertIsoToRvz() {
     showLogModal('Conversion ISO to RVZ');
     try {
         const result = await window.electronAPI.convertIsoToRvz(source, destination);
-        updateProgress(100, 'Conversion terminée');
+        updateProgress(100, 0, 'Conversion terminée');
         const { convertedGames, errorCount } = result.summary;
         if (errorCount > 0) {
             alert(`Opération terminée avec ${errorCount} erreur(s). Consultez le journal pour plus de détails.`);
         } else {
             alert('Tous les jeux sont convertis, y\'a plus qu\'à jouer :D');
         }
-    } catch (error) {
-        appendLog(`Erreur: ${error.message}`);
-        alert(`Erreur: ${error.message}`);
-    }
-}
-
-async function simpleConversion(actionName, modalTitle) {
-    const source = document.getElementById('sourceFolder').value;
-    const destination = document.getElementById('destinationFolder').value;
-    if (!source || !destination) return alert('Veuillez sélectionner les dossiers source et destination.');
-    showLogModal(modalTitle);
-    try {
-        await window.electronAPI[actionName](source, destination);
-        appendLog('Opération terminée avec succès.');
-        updateProgress(100, 'Opération terminée');
     } catch (error) {
         appendLog(`Erreur: ${error.message}`);
         alert(`Erreur: ${error.message}`);

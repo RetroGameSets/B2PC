@@ -66,11 +66,15 @@
                     <div id="logContent" class="flex-grow overflow-y-auto mb-4 p-2 border border-gray-600" style="max-height: 60vh;"></div>
                     <div id="logs" class="hidden"></div>
                     <div class="mb-4">
-                        <div id="progressLabel" class="text-sm text-gray-600">Progression :</div>
+                        <div id="currentFileProgressLabel" class="text-sm text-gray-600">Progression fichier en cours :</div>
                         <div class="w-full bg-gray-200 rounded-full h-2.5">
-                            <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                            <div id="currentFileProgressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
                         </div>
-                        <div id="progressText" class="text-sm text-gray-600 text-right">0%</div>
+                        <div id="totalProgressLabel" class="text-sm text-gray-600">Progression totale :</div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <div id="totalProgressBar" class="bg-green-600 h-2.5 rounded-full" style="width: 0%"></div>
+                        </div>
+                        <div id="totalProgressText" class="text-sm text-gray-600 text-right">0%</div>
                     </div>
                     <div class="flex justify-end gap-2">
                         <button id="openLogFolder" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Ouvrir dossier LOG</button>
@@ -81,8 +85,10 @@
         </div>
     </div>
 
-    <footer class="text-center text-gray-600 py-4 bg-gray-200 w-full"></footer>
-
+    <!-- <footer id="appfooter" class="text-center text-black py-4 bg-gray-200 w-full"></footer> -->
+	 <footer class="bg-gray-200 text-black text-center py-4 w-full">
+             <!-- Contenu initial vide, sera rempli par renderer.js -->
+         </footer>
     <script src="renderer.js"></script>
 </body>
 </html>
