@@ -27,15 +27,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
         }
         return ipcRenderer.invoke('patch-xbox-iso', source, dest);
     },
-    patchXboxIso: async (source, dest) => {
-        if (!await fs.access(source).then(() => true).catch(() => false)) {
-            throw new Error(`Dossier source n'existe pas : ${source}`);
-        }
-        if (!await fs.access(dest).then(() => true).catch(() => false)) {
-            throw new Error(`Dossier destination n'existe pas : ${dest}`);
-        }
-        return ipcRenderer.invoke('patch-xbox-iso', source, dest);
-    },
 	convertToChdv5: async (source, dest) => {
         if (!await fs.access(source).then(() => true).catch(() => false)) {
             throw new Error(`Dossier source n'existe pas : ${source}`);
@@ -44,6 +35,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
             throw new Error(`Dossier destination n'existe pas : ${dest}`);
         }
         return ipcRenderer.invoke('convert-to-chdv5', source, dest);
+    },
+    extractChd: async (source, dest) => {
+        if (!await fs.access(source).then(() => true).catch(() => false)) {
+            throw new Error(`Dossier source n'existe pas : ${source}`);
+        }
+        if (!await fs.access(dest).then(() => true).catch(() => false)) {
+            throw new Error(`Dossier destination n'existe pas : ${dest}`);
+        }
+        return ipcRenderer.invoke('extract-chd', source, dest);
     },
     convertIsoToRvz: async (source, dest) => {
         if (!await fs.access(source).then(() => true).catch(() => false)) {
@@ -138,5 +138,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     getAppVersion: () => appVersion // Exposer la version de l'application
 });
-
+// Gérer la confirmation de nettoyage dans preload.js
+ipcRenderer.on('request-cleanup-confirmation', (event, cleanupChannel) => {
+    dialog.showMessageBox({
+        type: 'question',
+        buttons: ['Oui', 'Non'],
+        defaultId: 1, // "Non" par défaut
+        title: 'Confirmation de suppression',
+        message: 'Voulez-vous supprimer les fichiers ISO source après la conversion ?',
+        detail: 'Les fichiers .iso dans le dossier source seront supprimés si vous choisissez "Oui".'
+    }).then((response) => {
+        const shouldDelete = response.response === 0;
+        ipcRenderer.send(cleanupChannel, shouldDelete);
+    });
+});
 console.log('preload.js: electronAPI exposé');

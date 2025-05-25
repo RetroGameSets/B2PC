@@ -10,9 +10,15 @@ const minutes = String(now.getMinutes()).padStart(2, '0');
 const timestamp = `${year}-${month}-${day}_${hours}h${minutes}`;
 let logFilePath = `${logDir}/LOG-${timestamp}.txt`;
 
+// Stocker le résumé pour l’afficher dans un tableau
+let summary = { convertedGames: 0, skippedGames: 0, errorCount: 0, duration: 0 };
+// État pour suivre les erreurs d'extraction
+let hasExtractionError = false;
+
 document.getElementById('selectSourceFolder').addEventListener('click', selectSourceFolder);
 document.getElementById('selectDestinationFolder').addEventListener('click', selectDestinationFolder);
 document.getElementById('convertToChdv5').addEventListener('click', convertToChdv5);
+document.getElementById('extractChd').addEventListener('click', extractChd);
 document.getElementById('patchXboxIso').addEventListener('click', patchXboxIso);
 document.getElementById('convertIsoToRvz').addEventListener('click', convertIsoToRvz);
 document.getElementById('openLogFolder').addEventListener('click', openLogFolder);
@@ -23,7 +29,75 @@ window.electronAPI.onLogMessage((message) => {
     console.log('Log reçu dans renderer:', message); // Débogage
     const logContent = document.getElementById('logContent');
     if (logContent) {
-        logContent.innerHTML += `<p>${message}</p>`;
+        let messageClass = 'bg-blue-100 text-blue-800';
+        let icon = 'ℹ️'; // Icône par défaut pour les infos
+
+        // Déterminer le type de message pour appliquer la bonne classe et icône
+        if (
+            (message.includes('Erreur') || message.includes('Échec')) &&
+            !(message.includes('Compression complete') && message.includes('final ratio'))
+        ) {
+            messageClass = 'bg-red-100 text-red-800';
+            icon = '❌';
+            hasExtractionError = true; // Marquer une erreur si présente
+        } else if (
+            message.includes('Conversion réussie') ||
+            message.includes('Extraction terminée') ||
+            message.includes('Nettoyage terminé') ||
+            message.includes('dolphin-tool chargé avec succès') ||
+            (message.includes('Compression complete') && message.includes('final ratio'))
+        ) {
+            messageClass = 'bg-green-100 text-green-800';
+            icon = '✅';
+        } else if (
+            message.includes('Demande de confirmation') ||
+            message.includes('Nettoyage annulé') ||
+            message.includes('Jeu déjà converti') ||
+            message.includes('Total des fichiers') ||
+            message.includes('Dossier source') ||
+            message.includes('Dossier destination') ||
+            message.includes('Compressing,')
+        ) {
+            messageClass = 'bg-yellow-100 text-yellow-800';
+            icon = '⏳';
+        }
+
+        // Extraire les informations du résumé
+        if (message.includes('Conversion RVZ terminée en')) {
+            const durationMatch = message.match(/terminée en (\d+\.\d+)s/);
+            if (durationMatch) summary.duration = parseFloat(durationMatch[1]);
+        } else if (message.includes('Jeux convertis :')) {
+            const convertedMatch = message.match(/Jeux convertis : (\d+)/);
+            if (convertedMatch) summary.convertedGames = parseInt(convertedMatch[1]);
+        } else if (message.includes('Jeux ignorés :')) {
+            const skippedMatch = message.match(/Jeux ignorés : (\d+)/);
+            if (skippedMatch) summary.skippedGames = parseInt(skippedMatch[1]);
+        } else if (message.includes('Erreurs :')) {
+            const errorMatch = message.match(/Erreurs : (\d+)/);
+            if (errorMatch) {
+                summary.errorCount = parseInt(errorMatch[1]);
+                // Afficher le tableau de résumé après avoir reçu le dernier élément (Erreurs)
+                appendSummaryTable();
+            }
+        }
+
+        // Filtrer les messages d'extraction si pas d'erreur
+        if (
+            !hasExtractionError &&
+            (message.includes('Exécution de 7za.exe') ||
+             message.includes('7za stdout:') ||
+             message.includes('Extraction terminée :') && message.includes('->'))
+        ) {
+            return; // Ignorer ces messages si pas d'erreur
+        }
+
+        // Ajouter le message au contenu du log avec Tailwind
+        logContent.innerHTML += `
+            <div class="flex items-center gap-2 p-2 my-1 rounded ${messageClass}">
+                <span class="text-lg">${icon}</span>
+                <span>${message}</span>
+            </div>
+        `;
         logContent.scrollTop = logContent.scrollHeight;
         appendLog(message); // Appeler appendLog pour écrire dans le fichier
     } else {
@@ -34,6 +108,13 @@ window.electronAPI.onLogMessage((message) => {
 // Écouter les mises à jour de progression
 window.electronAPI.onProgressUpdate(({ percent, message, current, total }) => {
     updateProgress(percent, message, current, total);
+});
+
+// Écouter la demande de confirmation pour le nettoyage
+window.electronAPI.onRequestCleanupConfirmation((event, cleanupChannel) => {
+    console.log('Demande de confirmation reçue dans renderer:', cleanupChannel); // Débogage
+    // La logique de dialog.showMessageBox est maintenant dans preload.js
+    // Pas besoin d'ajouter de code ici, preload.js gère tout
 });
 
 // Mettre à jour la version dans le footer
@@ -85,6 +166,9 @@ function showLogModal(functionName) {
         const logContent = document.getElementById('logContent');
         if (logContent) {
             logContent.innerHTML = ''; // Réinitialiser le contenu
+            summary = { convertedGames: 0, skippedGames: 0, errorCount: 0, duration: 0 }; // Réinitialiser le résumé
+            hasExtractionError = false; // Réinitialiser l'état d'erreur d'extraction
+            logContent.classList.add('bg-gray-100', 'max-h-96', 'overflow-y-auto', 'p-4', 'rounded-lg');
         }
         updateProgress(0, 'Initialisation...');
     } else {
@@ -114,6 +198,41 @@ async function appendLog(message) {
         }
     } else {
         console.error('Élément logContent non trouvé');
+    }
+}
+
+function appendSummaryTable() {
+    const logContent = document.getElementById('logContent');
+    if (logContent) {
+        logContent.innerHTML += `
+            <table class="w-full border-collapse mt-4 bg-white shadow-md">
+                <thead>
+                    <tr>
+                        <th class="bg-gray-200 text-left p-2 font-bold text-gray-700">Métrique</th>
+                        <th class="bg-gray-200 text-left p-2 font-bold text-gray-700">Valeur</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="p-2 border-b border-gray-300 text-gray-600">Temps écoulé</td>
+                        <td class="p-2 border-b border-gray-300 text-gray-600">${summary.duration.toFixed(2)}s</td>
+                    </tr>
+                    <tr>
+                        <td class="p-2 border-b border-gray-300 text-gray-600">Jeux convertis</td>
+                        <td class="p-2 border-b border-gray-300 text-gray-600">${summary.convertedGames}</td>
+                    </tr>
+                    <tr>
+                        <td class="p-2 border-b border-gray-300 text-gray-600">Jeux ignorés</td>
+                        <td class="p-2 border-b border-gray-300 text-gray-600">${summary.skippedGames}</td>
+                    </tr>
+                    <tr>
+                        <td class="p-2 text-gray-600">Erreurs</td>
+                        <td class="p-2 text-gray-600">${summary.errorCount}</td>
+                    </tr>
+                </tbody>
+            </table>
+        `;
+        logContent.scrollTop = logContent.scrollHeight;
     }
 }
 
@@ -175,6 +294,26 @@ async function convertToChdv5() {
             alert(`Opération terminée avec ${errorCount} erreur(s). Consultez le journal pour plus de détails.`);
         } else {
             alert('Tous les jeux sont convertis, y\'a plus qu\'à jouer :D');
+        }
+    } catch (error) {
+        appendLog(`Erreur: ${error.message}`);
+        alert(`Erreur: ${error.message}`);
+    }
+}
+
+async function extractChd() {
+    const source = document.getElementById('sourceFolder').value;
+    const destination = document.getElementById('destinationFolder').value;
+    if (!source || !destination) return alert('Veuillez sélectionner les dossiers source et destination.');
+    showLogModal('Extraction CHD');
+    try {
+        const result = await window.electronAPI.extractChd(source, destination);
+        updateProgress(100, 'Extraction terminée');
+        const { extractedGames, skippedGames, errorCount } = result.summary;
+        if (errorCount > 0) {
+            alert(`Opération terminée avec ${errorCount} erreur(s). Consultez le journal pour plus de détails.`);
+        } else {
+            alert('Tous les jeux sont extraits, y\'a plus qu\'à jouer :D');
         }
     } catch (error) {
         appendLog(`Erreur: ${error.message}`);
