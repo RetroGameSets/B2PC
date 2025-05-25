@@ -28,9 +28,19 @@
   - Supprime automatiquement les fichiers temporaires après extraction.
   - Fournit des logs détaillés et une barre de progression pour suivre l’opération.
   - Gère les erreurs (ex. fichiers CHD invalides) avec des notifications claires.
-- **Utilisation** : Sélectionnez un dossier source contenant des fichiers `.chd` ou des archives, un dossier destination, et cliquez sur **Extract CHD** dans l’onglet **Extraction**.
+- **Utilisation** : Sélectionnez un dossier source contenant des fichiers `.chd` ou des archives, un dossier destination, et cliquez sur **Extract CHD** dans l’onglet **Conversion**.
 
-### 3. Patch XBOX ISO pour xemu
+### 3. Merge bin /cue
+- **Description** : Fusion des jeux au format .cue avec multiples fichiers .bin pour ceux qui souhaitent conserver ce format de fichier, mais pas un grand nombre de fichiers .bin (track01, track02, ...)
+- **Détails** :
+  - Traite les fichiers `.cue` et leurs `.bin` associés directement dans le dossier source ou extraits depuis des archives (`.zip`, `.7z`, `.gz`, `.rar`).
+  - Extrait les contenus dans le dossier source et converti en CHD les fichiers temporaires dans un sous-dossier `CHD_TEMP` du dossier destination, puis extrait le CHD en un seul BIN/CUE dans le dossier Merged_CUE.
+  - Supprime automatiquement les fichiers temporaires CHD après conversion.
+  - Fournit des logs détaillés et une barre de progression pour suivre l’opération.
+  - Gère les erreurs (ex. fichiers avec un seul BIN, ou BIN manquant dans la liste du CUE) avec des notifications claires.
+- **Utilisation** : Sélectionnez un dossier source contenant des fichiers `.cue` et `.bin` ou des archives, un dossier destination, et cliquez sur **Merge BIN/CUE** dans l’onglet **Conversion**.
+
+### 4. Patch XBOX ISO pour xemu
 - **Description** : Patche les fichiers ISO Xbox Classic pour les rendre compatibles avec l’émulateur xemu.
 - **Détails** :
   - Traite les fichiers `.iso` directement dans le dossier source ou extraits depuis des archives (`.zip`, `.7z`, `.gz`, `.rar`).
@@ -40,7 +50,7 @@
   - Affiche un résumé des jeux patchés, ignorés, et des erreurs rencontrées.
 - **Utilisation** : Sélectionnez un dossier source avec des ISO ou archives Xbox, un dossier destination, et cliquez sur **Patch XBOX ISO xemu** dans l’onglet **Patch**.
 
-### 4. Conversion / Compression Gamecube ISO en RVZ pour Dolphin
+### 5. Conversion / Compression Gamecube ISO en RVZ pour Dolphin
 - **Description** : Convertit et compresse les fichiers ISO Gamecube/Wii en format `.rvz` pour un gain de place et une meilleure compatibilité avec l’émulateur Dolphin.
 - **Détails** :
   - Traite les fichiers `.iso` directement dans le dossier source ou extraits depuis des archives (`.zip`, `.7z`, `.gz`, `.rar`).
