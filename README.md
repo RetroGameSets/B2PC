@@ -4,9 +4,9 @@
 ![Screenshot](https://github.com/RetroGameSets/B2PC/blob/main/B2PC%20Home%20screen.png)
 ![Screenshot](https://github.com/RetroGameSets/B2PC/blob/main/B2PC%20Log%20screen.png)
 
-**Batch Games Converter (B2PC)** est une application de bureau conçue pour simplifier la conversion, l'extraction et le traitement des ROMs de jeux rétro pour divers systèmes, notamment PS1, PS2, Dreamcast, PCEngineCD, SegaCD, Saturn, Xbox, GameCube et Wii. Développée par RetroGameSets.fr, B2PC vise à offrir une interface utilisateur intuitive pour automatiser des tâches comme la conversion de formats de fichiers, l'extraction de contenus, et le patchage pour la compatibilité avec des émulateurs modernes.
+**Batch Games Converter (B2PC)** est une application de bureau conçue pour simplifier la conversion, l'extraction et le traitement des ROMs de jeux rétro pour divers systèmes, notamment PS1, PS2, Dreamcast, PCEngineCD, SegaCD, Saturn, Xbox, GameCube et Wii. Développée par RetroGameSets.fr, B2PC vise à offrir une interface utilisateur intuitive pour automatiser des tâches comme la conversion de formats de fichiers, l'extraction de contenus, le patchage pour la compatibilité avec des émulateurs modernes, et la compression pour l'optimisation de l'espace disque.
 
-> **Note** : B2PC est en cours de développement actif. Certaines fonctionnalités sont actuellement disponibles, avec de nouvelles améliorations prévues à l'avenir. Dernière mise à jour : 25 mai 2025.
+> **Note** : B2PC est en cours de développement actif. Certaines fonctionnalités sont actuellement disponibles, avec de nouvelles améliorations prévues à l'avenir. Dernière mise à jour : 26 mai 2025.
 
 ## Fonctionnalités actives
 
@@ -18,7 +18,7 @@
   - Supprime automatiquement les fichiers extraits après conversion pour éviter l’encombrement.
   - Fournit des logs détaillés (ex. « Compression complete ... final ratio = 65.6% ») et une barre de progression pour suivre l’avancement.
   - Affiche les erreurs critiques et un résumé final (jeux convertis, ignorés, erreurs).
-- **Utilisation** : Sélectionnez un dossier source contenant des fichiers ou archives, un dossier destination, et cliquez sur **CUE/GDI/ISO to CHD v5** dans l’onglet **Conversion**.
+- **Utilisation** : Sélectionnez un dossier source contenant des fichiers ou archives, un dossier destination, et cliquez sur **CHD v5** dans l’onglet **Conversion**.
 
 ### 2. Extraction CHD
 - **Description** : Extrait les fichiers `.chd` pour restaurer leurs contenus originaux (`.iso`, `.cue`, ou `.gdi` avec `.bin`) afin de permettre des modifications ou une vérification.
@@ -28,13 +28,13 @@
   - Supprime automatiquement les fichiers temporaires après extraction.
   - Fournit des logs détaillés et une barre de progression pour suivre l’opération.
   - Gère les erreurs (ex. fichiers CHD invalides) avec des notifications claires.
-- **Utilisation** : Sélectionnez un dossier source contenant des fichiers `.chd` ou des archives, un dossier destination, et cliquez sur **Extract CHD** dans l’onglet **Conversion**.
+- **Utilisation** : Sélectionnez un dossier source contenant des fichiers `.chd` ou des archives, un dossier destination, et cliquez sur **Extract CHD > BIN/CUE** dans l’onglet **Conversion**.
 
-### 3. Merge bin /cue
-- **Description** : Fusion des jeux au format .cue avec multiples fichiers .bin pour ceux qui souhaitent conserver ce format de fichier, mais pas un grand nombre de fichiers .bin (track01, track02, ...)
+### 3. Merge bin/cue
+- **Description** : Fusionne les jeux au format `.cue` avec multiples fichiers `.bin` pour ceux qui souhaitent conserver ce format de fichier, mais avec un seul fichier `.bin` (au lieu de plusieurs pistes comme track01, track02, etc.).
 - **Détails** :
   - Traite les fichiers `.cue` et leurs `.bin` associés directement dans le dossier source ou extraits depuis des archives (`.zip`, `.7z`, `.gz`, `.rar`).
-  - Extrait les contenus dans le dossier source et converti en CHD les fichiers temporaires dans un sous-dossier `CHD_TEMP` du dossier destination, puis extrait le CHD en un seul BIN/CUE dans le dossier Merged_CUE.
+  - Extrait les contenus dans le dossier source, convertit en CHD les fichiers temporaires dans un sous-dossier `CHD_TEMP` du dossier destination, puis extrait le CHD en un seul BIN/CUE dans le dossier `Merged_CUE`.
   - Supprime automatiquement les fichiers temporaires CHD après conversion.
   - Fournit des logs détaillés et une barre de progression pour suivre l’opération.
   - Gère les erreurs (ex. fichiers avec un seul BIN, ou BIN manquant dans la liste du CUE) avec des notifications claires.
@@ -48,7 +48,7 @@
   - Supprime les fichiers extraits après conversion.
   - Fournit des logs détaillés et une barre de progression.
   - Affiche un résumé des jeux patchés, ignorés, et des erreurs rencontrées.
-- **Utilisation** : Sélectionnez un dossier source avec des ISO ou archives Xbox, un dossier destination, et cliquez sur **Patch XBOX ISO xemu** dans l’onglet **Patch**.
+- **Utilisation** : Sélectionnez un dossier source avec des ISO ou archives Xbox, un dossier destination, et cliquez sur **XBOX ISO (Xemu)** dans l’onglet **Patch**.
 
 ### 5. Conversion / Compression Gamecube ISO en RVZ pour Dolphin
 - **Description** : Convertit et compresse les fichiers ISO Gamecube/Wii en format `.rvz` pour un gain de place et une meilleure compatibilité avec l’émulateur Dolphin.
@@ -58,7 +58,18 @@
   - Supprime les fichiers extraits après conversion.
   - Fournit des logs détaillés (ex. « Compressing, 50.0% complete ») et une double barre de progression (totale et fichier en cours).
   - Vérifie la compatibilité des ISO avant conversion et gère les erreurs (ex. fichiers incompatibles).
-- **Utilisation** : Sélectionnez un dossier source avec des ISO ou archives Gamecube/Wii, un dossier destination, et cliquez sur **Convert ISO to RVZ** dans l’onglet **Conversion**.
+- **Utilisation** : Sélectionnez un dossier source avec des ISO ou archives Gamecube/Wii, un dossier destination, et cliquez sur **GC/WII ISO to RVZ** dans l’onglet **Conversion**.
+
+### 6. Compression de dossiers de jeux en wSquashFS pour Wine
+- **Description** : Compresse des dossiers contenant des jeux ou des ROMs en fichiers `.wsquashfs` pour optimiser l’espace de stockage et faciliter l’utilisation sous batocera.
+- **Détails** :
+  - Traite les dossiers de premier niveau dans le dossier source, en ignorant les fichiers individuels.
+  - Utilise `gensquashfs.exe` pour créer des fichiers `.wsquashfs` avec trois niveaux de compression : rapide (lz4), moyen (zstd), ou maximum (xz).
+  - Place les fichiers compressés dans un sous-dossier `Compressed_SquashFS` du dossier destination.
+  - Supprime automatiquement les dossiers source après compression si l’utilisateur le confirme.
+  - Fournit des logs détaillés (ex. « Compression réussie : nom_dossier.wsquashfs ») et une barre de progression pour suivre l’opération.
+  - Gère les erreurs (ex. permissions insuffisantes, dossier déjà compressé) avec des notifications claires et un résumé final (dossiers compressés, ignorés, erreurs).
+- **Utilisation** : Sélectionnez un dossier source contenant des dossiers de jeux, un dossier destination, choisissez un niveau de compression (rapide, moyen, maximum), et cliquez sur **Compression wSquashFS** dans l’onglet **Compression**.
 
 ## Prérequis
 
@@ -68,7 +79,8 @@
   - `chdman.exe` (conversion et extraction en CHD).
   - `xiso.exe` (patchage Xbox).
   - `DolphinTool.exe` (conversion en RVZ).
-- **Espace disque** : Prévoir de l’espace pour les fichiers extraits, convertis, et restaurés.
+  - `gensquashfs.exe` (compression en wSquashFS).
+- **Espace disque** : Prévoir de l’espace pour les fichiers extraits, convertis, restaurés, ou compressés.
 
 ## Télécharger B2PC
 Téléchargez la dernière version bêta pour Windows depuis [GitHub Releases](https://github.com/RetroGameSets/B2PC/releases).
