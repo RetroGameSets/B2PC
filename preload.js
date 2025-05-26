@@ -63,6 +63,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
         }
         return ipcRenderer.invoke('merge-bin-cue', source, dest);
     },
+	compressFolders: async (source, dest, compressionLevel) => {
+		 if (!await fs.access(source).then(() => true).catch(() => false)) {
+            throw new Error(`Dossier source n'existe pas : ${source}`);
+        }
+        if (!await fs.access(dest).then(() => true).catch(() => false)) {
+            throw new Error(`Dossier destination n'existe pas : ${dest}`);
+        }
+		return ipcRenderer.invoke('compress-folders', source, dest, compressionLevel);
+	},
+	
+	
+	
     onLogMessage: (callback) => ipcRenderer.on('log-message', (_, msg) => callback(msg)),
     onProgressUpdate: (callback) => ipcRenderer.on('progress-update', (_, data) => callback(data)),
 

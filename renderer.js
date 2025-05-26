@@ -23,6 +23,7 @@ document.getElementById('convertIsoToRvz').addEventListener('click', convertIsoT
 document.getElementById('mergeBinCue').addEventListener('click', mergeBinCue);
 document.getElementById('openLogFolder').addEventListener('click', openLogFolder);
 document.getElementById('closeLogModal').addEventListener('click', closeLogModal);
+document.getElementById('compressFolders').addEventListener('click', compressFolders);
 
 // Écouter les messages de log
 window.electronAPI.onLogMessage((message) => {
@@ -47,6 +48,10 @@ window.electronAPI.onLogMessage((message) => {
             message.includes('Nettoyage terminé') ||
             message.includes('Extraction réussie') ||
             message.includes('Fusion réussie') ||
+            message.includes('Compression réussie') || 
+            message.includes('Patch Xbox terminé') || 
+            message.includes('successfully rewritten') || 
+            message.includes('Compression terminée') || 
             (message.includes('Compression complete') && message.includes('final ratio'))
         ) {
             messageClass = 'bg-green-100 text-green-800';
@@ -57,6 +62,7 @@ window.electronAPI.onLogMessage((message) => {
             message.includes('Jeu déjà converti') ||
             message.includes('Fichiers déjà extraits') ||
             message.includes('Fichier déjà converti') ||
+            message.includes('Dossier déjà compressé') || // Ajout pour la compression
             message.includes('Total des fichiers') ||
             message.includes('Dossier source') ||
             message.includes('Dossier destination') ||
@@ -67,14 +73,28 @@ window.electronAPI.onLogMessage((message) => {
         }
 
         // Extraire les informations du résumé
-        if (message.includes('Conversion RVZ terminée en') || message.includes('Conversion CHD terminée en') || message.includes('Extraction CHD terminée en') || message.includes('Fusion BIN/CUE terminée en')) {
+        if (
+            message.includes('Conversion RVZ terminée en') ||
+            message.includes('Conversion CHD terminée en') ||
+            message.includes('Extraction CHD terminée en') ||
+            message.includes('Fusion BIN/CUE terminée en') ||
+            message.includes('Compression terminée en') // Ajout pour la compression
+        ) {
             const durationMatch = message.match(/terminée en (\d+\.\d+)s/);
             if (durationMatch) summary.duration = parseFloat(durationMatch[1]);
-        } else if (message.includes('Jeux convertis :') || message.includes('Jeux extraits :') || message.includes('Jeux fusionnés :')) {
-            const convertedMatch = message.match(/(?:Jeux convertis|Jeux extraits|Jeux fusionnés) : (\d+)/);
+        } else if (
+            message.includes('Jeux convertis :') ||
+            message.includes('Jeux extraits :') ||
+            message.includes('Jeux fusionnés :') ||
+            message.includes('Dossiers compressés :') // Ajout pour la compression
+        ) {
+            const convertedMatch = message.match(/(?:Jeux convertis|Jeux extraits|Jeux fusionnés|Dossiers compressés) : (\d+)/);
             if (convertedMatch) summary.convertedGames = parseInt(convertedMatch[1]);
-        } else if (message.includes('Jeux ignorés :')) {
-            const skippedMatch = message.match(/Jeux ignorés : (\d+)/);
+        } else if (
+            message.includes('Jeux ignorés :') ||
+            message.includes('Dossiers ignorés :') // Ajout pour la compression
+        ) {
+            const skippedMatch = message.match(/(?:Jeux ignorés|Dossiers ignorés) : (\d+)/);
             if (skippedMatch) summary.skippedGames = parseInt(skippedMatch[1]);
         } else if (message.includes('Erreurs :')) {
             const errorMatch = message.match(/Erreurs : (\d+)/);
@@ -128,14 +148,6 @@ window.addEventListener('DOMContentLoaded', () => {
 function updateButtonStates() {
     const source = document.getElementById('sourceFolder').value;
     const destination = document.getElementById('destinationFolder').value;
-    const patchButton = document.getElementById('patchXboxIso');
-    const chdButton = document.getElementById('convertToChdv5');
-    const rvzButton = document.getElementById('convertIsoToRvz');
-    const mergeButton = document.getElementById('mergeBinCue');
-    const buttons = [patchButton, chdButton, rvzButton, mergeButton];
-    buttons.forEach(button => {
-        button.disabled = !(source && destination);
-    });
 }
 
 document.getElementById('sourceFolder').addEventListener('input', updateButtonStates);
@@ -372,6 +384,27 @@ async function mergeBinCue() {
             alert(`Opération terminée avec ${errorCount} erreur(s). Consultez le journal pour plus de détails.`);
         } else {
             alert('Tous les jeux sont fusionnés, y\'a plus qu\'à jouer :D');
+        }
+    } catch (error) {
+        appendLog(`Erreur: ${error.message}`);
+        alert(`Erreur: ${error.message}`);
+    }
+}
+
+async function compressFolders() {
+    const source = document.getElementById('sourceFolder').value;
+    const destination = document.getElementById('destinationFolder').value;
+    const compressionLevel = document.getElementById('compressionLevel').value;
+    if (!source || !destination) return alert('Veuillez sélectionner les dossiers source et destination.');
+    showLogModal('Compression wSquashFS');
+    try {
+        const result = await window.electronAPI.compressFolders(source, destination, compressionLevel);
+        updateProgress(100, 0, 'Compression terminée');
+        const { compressedFolders, skippedFolders, errorCount } = result.summary;
+        if (errorCount > 0) {
+            alert(`Opération terminée avec ${errorCount} erreur(s). Consultez le journal pour plus de détails.`);
+        } else {
+            alert('Tous les dossiers sont compressés.');
         }
     } catch (error) {
         appendLog(`Erreur: ${error.message}`);

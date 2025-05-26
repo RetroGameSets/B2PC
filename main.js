@@ -995,3 +995,162 @@ ipcMain.handle('merge-bin-cue', async (_, source, dest) => {
         sendProgress(100, `Terminé`, 0, 0, 0);
     }
 });
+
+
+
+
+
+ipcMain.handle('compress-folders', async (_, source, dest, compressionLevel) => {
+    const startTime = Date.now();
+    const destination = await prepareDirectories(dest, 'Compressed_SquashFS');
+    let compressedFolders = 0, skippedFolders = 0, errorCount = 0;
+
+    try {
+        sendLog('Début de la compression des dossiers en .wsquashfs...');
+        sendLog(`Dossier source: ${source}`);
+        sendLog(`Dossier destination: ${destination}`);
+
+        // Chemin vers gensquashfs.exe
+        const gensquashfsPath = path.join(resourcesPath, 'gensquashfs.exe');
+        if (!fs.existsSync(gensquashfsPath)) {
+            sendLog(`Erreur : gensquashfs.exe non trouvé à ${gensquashfsPath}`);
+            throw new Error('gensquashfs.exe non trouvé');
+        }
+
+        // Lister uniquement les dossiers de premier niveau
+        const folders = [];
+        const files = await fsPromises.readdir(source, { withFileTypes: true });
+        for (const file of files) {
+            if (file.isDirectory()) {
+                folders.push(path.join(source, file.name));
+            }
+        }
+        sendLog(`Total des dossiers trouvés : ${folders.length}`);
+
+        if (folders.length === 0) {
+            sendLog('Aucun dossier trouvé dans le dossier source.');
+            return { summary: { compressedFolders, skippedFolders, errorCount } };
+        }
+
+        // Vérifier les permissions d'écriture
+        try {
+            await fsPromises.access(destination, fs.constants.W_OK);
+        } catch (error) {
+            sendLog(`Erreur: Pas de permissions d'écriture dans ${destination}. Exécutez en tant qu'administrateur ou choisissez un autre dossier.`);
+            throw new Error('Permissions insuffisantes pour écrire dans le dossier de destination');
+        }
+
+        // Boucle de compression avec progression
+        sendProgress(30, `Compression en SquashFS`, 0, folders.length);
+        for (let i = 0; i < folders.length; i++) {
+            const folder = folders[i];
+            const folderName = path.basename(folder);
+            const outputSquashfsPath = path.join(destination, `${folderName}.squashfs`);
+            const outputWsquashfsPath = path.join(destination, `${folderName}.wsquashfs`);
+
+            sendLog(`Compression de ${folderName}...`);
+            sendProgress(30 + (i / folders.length) * 50, `Compression en SquashFS`, i + 1, folders.length);
+
+            if (fs.existsSync(outputWsquashfsPath)) {
+                sendLog(`Dossier déjà compressé, ignoré : ${folderName}`);
+                skippedFolders++;
+                continue;
+            }
+
+            // Sélection du compresseur
+            let compressor;
+            switch (compressionLevel) {
+                case 'fast':
+                    compressor = 'lz4';
+                    break;
+                case 'medium':
+                    compressor = 'zstd';
+                    break;
+                case 'maximum':
+                    compressor = 'xz';
+                    break;
+                default:
+                    throw new Error('Niveau de compression invalide');
+            }
+
+            // Arguments pour gensquashfs
+            const args = [
+                '--pack-dir', folder, outputSquashfsPath,
+                '--compressor', compressor,
+                '--block-size', '1048576',
+                '--num-jobs', '8'
+            ];
+
+            try {
+                await new Promise((resolve, reject) => {
+                    const process = spawn(gensquashfsPath, args, { cwd: destination });
+                    let errorOutput = '';
+
+// Capturer et afficher la sortie standard (stdout)
+        process.stdout.on('data', (data) => {
+			const message = `gensquashfs stdout: ${data.toString()}`;
+			console.log(message);
+        });
+
+        // Capturer et afficher les erreurs (stderr)
+        process.stderr.on('data', (data) => {
+            errorOutput += data.toString();
+            sendLog(`gensquashfs stderr: ${data.toString()}`);
+        });
+                    
+                    process.on('close', (code) => {
+                        if (code === 0) resolve();
+                        else reject(new Error(errorOutput || 'Erreur inconnue lors de la compression'));
+                    });
+                });
+
+                if (fs.existsSync(outputSquashfsPath)) {
+                    fs.renameSync(outputSquashfsPath, outputWsquashfsPath);
+                    sendLog(`Compression réussie et renommée : ${folderName}.wsquashfs`);
+                    compressedFolders++;
+                } else {
+                    throw new Error('Fichier .squashfs non généré');
+                }
+            } catch (error) {
+                errorCount++;
+                sendLog(`Échec de la compression de ${folderName}: ${error.message}`);
+                if (fs.existsSync(outputSquashfsPath)) fs.unlinkSync(outputSquashfsPath);
+            }
+        }
+
+        const duration = (Date.now() - startTime) / 1000;
+        sendLog(`Compression terminée en ${duration}s`);
+        sendLog(`Dossiers compressés : ${compressedFolders}`);
+        sendLog(`Dossiers ignorés : ${skippedFolders}`);
+        sendLog(`Erreurs : ${errorCount}`);
+
+        // Demande de confirmation pour le nettoyage
+        sendLog('Demande de confirmation pour le nettoyage des dossiers source...');
+        const shouldCleanup = await new Promise((resolve) => {
+            const cleanupChannel = 'confirm-cleanup';
+            ipcMain.once(cleanupChannel, (_, shouldDelete) => resolve(shouldDelete));
+            mainWindow.webContents.send('request-cleanup-confirmation', cleanupChannel);
+        });
+
+        if (shouldCleanup) {
+            sendLog('Nettoyage des dossiers source...');
+            sendProgress(80, `Nettoyage`);
+            for (const folder of folders) {
+                await fsPromises.rm(folder, { recursive: true, force: true }).catch(err => 
+                    sendLog(`Erreur lors de la suppression de ${folder}: ${err.message}`)
+                );
+            }
+            sendLog('Nettoyage terminé.');
+        } else {
+            sendLog('Nettoyage annulé par l’utilisateur.');
+        }
+
+        return { summary: { compressedFolders, skippedFolders, errorCount } };
+    } catch (error) {
+        sendLog(`Erreur lors de la compression: ${error.message}`);
+        errorCount++;
+        throw error;
+    } finally {
+        sendProgress(100, `Terminé`);
+    }
+});

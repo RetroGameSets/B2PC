@@ -46,6 +46,12 @@
             <div>
                 <h2 class="text-xl font-bold mb-4">Compression / Décompression</h2>
                 <ul class="space-y-2">
+					<li><button id="compressFolders" class="w-50 bg-yellow-500 text-white px-4 py-2 rounded">Compression wSquashFS</button>
+        <select id="compressionLevel" class="p-2 border rounded">
+            <option value="fast">Rapide (lz4)</option>
+            <option value="medium" selected>Moyen (zstd)</option>
+            <option value="maximum">Maximum (xz)</option>
+        </select></li>
                     <li><button class="w-full bg-yellow-500 text-white px-4 py-2 rounded opacity-50 cursor-not-allowed">Compress</button></li>
                     <li><button class="w-full bg-yellow-500 text-white px-4 py-2 rounded opacity-50 cursor-not-allowed">Decompress</button></li>
                 </ul>
