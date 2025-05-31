@@ -4,3 +4,4 @@ ressources/style.css
 out/
 node_modules
 *.iso
+.vs/
