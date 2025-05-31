@@ -7,9 +7,11 @@ files:
   - preload.js
   - index.html
   - renderer.js
-  - ressources/style.css
-  - ressources/icon.ico
-  - ressources/images/**
+  - tools.js
+  - utils.js
+  - logger.js
+  - ressources/**/*
+  - handlers/**/*
 extraFiles:
   - from: ressources/
     to: ressources/

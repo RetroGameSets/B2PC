@@ -11,7 +11,7 @@
         <div class="text-center mb-5">
             <img src="ressources/images/logo.png" alt="Logo" class="mx-auto mt-2">
             <h5 class="text-gray-500 font-semibold italic">Conversion et compression de jeux automatisée</h5><br>
-			<h5 class="text-gray-500 italic">Compatible : PS1 / PS2 / Dreamcast / PCEngineCD / SegaCD / Saturn / Xbox / Gamecube / Wii</h5>
+            <h5 class="text-gray-500 italic">Compatible : PS1 / PS2 / Dreamcast / PCEngineCD / SegaCD / Saturn / Xbox / Gamecube / Wii</h5>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
@@ -35,9 +35,9 @@
             <div>
                 <h2 class="text-xl font-bold mb-4">Conversion</h2>
                 <ul class="space-y-2">
-				    <li><button id="convertToChdv5"  class="w-full bg-green-500 text-white px-4 py-2 rounded">CHD v5</button></li>				 
-                    <li><button id="extractChd"      class="w-full bg-green-500 text-white px-4 py-2 rounded">Extract CHD > BIN/CUE</button></li>					
-                    <li><button id="mergeBinCue"     class="w-full bg-green-500 text-white px-4 py-2 rounded">Merge BIN/CUE</button></li>
+                    <li><button id="convertToChdv5" class="w-full bg-green-500 text-white px-4 py-2 rounded">CHD v5</button></li>
+                    <li><button id="extractChd" class="w-full bg-green-500 text-white px-4 py-2 rounded">Extract CHD > BIN/CUE</button></li>
+                    <li><button id="mergeBinCue" class="w-full bg-green-500 text-white px-4 py-2 rounded">Merge BIN/CUE</button></li>
                     <li><button id="convertIsoToRvz" class="w-full bg-green-500 text-white px-4 py-2 rounded">GC/WII ISO to RVZ</button></li>
                     <li><button class="w-full bg-green-500 text-white px-4 py-2 rounded opacity-50 cursor-not-allowed">WII ISO to WBFS</button></li>
                     <li><button class="w-full bg-green-500 text-white px-4 py-2 rounded opacity-50 cursor-not-allowed">PS1 to PSP EBOOT</button></li>
@@ -46,12 +46,15 @@
             <div>
                 <h2 class="text-xl font-bold mb-4">Compression / Décompression</h2>
                 <ul class="space-y-2">
-					<li><button id="compressFolders" class="w-50 bg-yellow-500 text-white px-4 py-2 rounded">Compression wSquashFS</button>
-        <select id="compressionLevel" class="p-2 border rounded">
-            <option value="fast">Rapide (lz4)</option>
-            <option value="medium" selected>Moyen (zstd)</option>
-            <option value="maximum">Maximum (xz)</option>
-        </select></li>
+                    <li>
+                        <button id="compressWsquashFS" class="w-50 bg-yellow-500 text-white px-4 py-2 rounded">Compression wSquashFS</button>
+                        <select id="compressionLevel" class="p-2 border rounded">
+                            <option value="fast">Rapide (lz4)</option>
+                            <option value="medium" selected>Moyen (zstd)</option>
+                            <option value="maximum">Maximum (xz)</option>
+                        </select>
+                    </li>
+                    <li><button id="extractWsquashFS" class="w-50 bg-yellow-500 text-white px-4 py-2 rounded">Decompression wSquashFS</button></li>
                     <li><button class="w-full bg-yellow-500 text-white px-4 py-2 rounded opacity-50 cursor-not-allowed">Compress</button></li>
                     <li><button class="w-full bg-yellow-500 text-white px-4 py-2 rounded opacity-50 cursor-not-allowed">Decompress</button></li>
                 </ul>
@@ -67,7 +70,7 @@
 
         <div class="mb-6">
             <div id="logModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
-				<div class="bg-gray-800 p-6 rounded shadow-lg w-[90vh] max-h-[90vh] flex flex-col text-white">
+                <div class="bg-gray-800 p-6 rounded shadow-lg w-[90vh] max-h-[90vh] flex flex-col text-white">
                     <h2 class="text-2xl font-bold mb-4">Journal des opérations</h2>
                     <div id="logContent" class="flex-grow overflow-y-auto mb-4 p-2 border border-gray-600" style="max-height: 60vh;"></div>
                     <div id="logs" class="hidden"></div>
@@ -92,9 +95,9 @@
     </div>
 
     <!-- <footer id="appfooter" class="text-center text-black py-4 bg-gray-200 w-full"></footer> -->
-	 <footer class="bg-gray-200 text-black text-center py-4 w-full">
-             <!-- Contenu initial vide, sera rempli par renderer.js -->
-         </footer>
+    <footer class="bg-gray-200 text-black text-center py-4 w-full">
+        <!-- Contenu initial vide, sera rempli par renderer.js -->
+    </footer>
     <script src="renderer.js"></script>
 </body>
 </html>
