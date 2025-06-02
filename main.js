@@ -88,7 +88,7 @@ function createWindow() {
     enable(mainWindow.webContents);
     mainWindow.loadFile('index.html');
     mainWindow.setMenu(null);
-    // mainWindow.webContents.openDevTools();
+    //mainWindow.webContents.openDevTools();
 
     const imagesPath = path.join(__dirname, 'ressources', 'images');
     if (!fs.existsSync(resourcesPath)) {

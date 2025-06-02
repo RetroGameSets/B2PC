@@ -1,4 +1,3 @@
-// renderer.js
 const logDir = window.electronAPI.getLogDir(); // Obtenir logDir depuis preload.js
 // Générer le timestamp en heure locale
 const now = new Date();
@@ -68,6 +67,14 @@ window.electronAPI.onLogMessage((message) => {
             icon = '⏳';
         }
 
+        // Ajuster les classes pour le mode sombre
+        if (document.documentElement.classList.contains('dark')) {
+            if (messageClass === 'bg-blue-100 text-blue-800') messageClass = 'bg-blue-800 text-blue-100';
+            else if (messageClass === 'bg-red-100 text-red-800') messageClass = 'bg-red-800 text-red-100';
+            else if (messageClass === 'bg-green-100 text-green-800') messageClass = 'bg-green-800 text-green-100';
+            else if (messageClass === 'bg-yellow-100 text-yellow-800') messageClass = 'bg-yellow-800 text-yellow-100';
+        }
+
         // Extraire les informations du résumé
         if (message.includes('Conversion RVZ terminée en') || message.includes('Conversion CHD terminée en') || message.includes('Extraction CHD terminée en') || message.includes('Fusion BIN/CUE terminée en')) {
             const durationMatch = message.match(/terminée en (\d+\.\d+)s/);
@@ -82,7 +89,6 @@ window.electronAPI.onLogMessage((message) => {
             const errorMatch = message.match(/Erreurs : (\d+)/);
             if (errorMatch) {
                 summary.errorCount = parseInt(errorMatch[1]);
-                // Afficher le tableau de résumé après avoir reçu le dernier élément (Erreurs)
                 appendSummaryTable();
             }
         }
@@ -116,12 +122,43 @@ window.electronAPI.onProgressUpdate((data) => {
     updateProgress(data.totalProgress, data.currentFileProgress, data.message);
 });
 
-// Mettre à jour la version dans le footer
+// Mettre à jour la version dans le footer et ajouter le bouton dark mode
 window.addEventListener('DOMContentLoaded', () => {
-    const versionElement = document.querySelector('footer');
-    if (versionElement) {
+    const footer = document.querySelector('footer');
+    if (footer) {
         const appVersion = window.electronAPI.getAppVersion();
-        versionElement.innerHTML = `RetroGameSets 2025 // Version ${appVersion}`;
+        footer.innerHTML = `
+            <span>RetroGameSets 2025 // Version ${appVersion}</span>
+            <button id="toggleDarkMode" class="absolute right-4 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-700">
+                Eteindre la lumière 🌙
+            </button>
+        `;
+
+        // Ajouter l'écouteur pour le bouton dark mode
+        const toggleDarkModeButton = document.getElementById('toggleDarkMode');
+        if (toggleDarkModeButton) {
+            console.log('Bouton toggleDarkMode trouvé !'); // Log pour confirmer que le bouton est trouvé
+
+            // Vérifier si le mode sombre est déjà activé
+            const isDarkMode = localStorage.getItem('darkMode') === 'true';
+            if (isDarkMode) {
+                document.documentElement.classList.add('dark');
+                toggleDarkModeButton.textContent = 'Allumer la lumière ☀️';
+            } else {
+                document.documentElement.classList.remove('dark');
+                toggleDarkModeButton.textContent = 'Eteindre la lumière 🌙';
+            }
+
+            toggleDarkModeButton.addEventListener('click', () => {
+                console.log('Clic sur le bouton dark mode !'); // Log pour confirmer le clic
+                const isDark = document.documentElement.classList.toggle('dark');
+                console.log('Mode sombre activé ?', isDark);
+                toggleDarkModeButton.textContent = isDark ? 'Allumer la lumière ☀️' : 'Eteindre la lumière 🌙';
+                localStorage.setItem('darkMode', isDark);
+            });
+        } else {
+            console.error('Bouton toggleDarkMode non trouvé !');
+        }
     } else {
         console.error('Élément footer non trouvé');
     }
@@ -169,14 +206,13 @@ function showLogModal(functionName) {
             logContent.innerHTML = ''; // Réinitialiser le contenu
             summary = { convertedGames: 0, skippedGames: 0, errorCount: 0, duration: 0 }; // Réinitialiser le résumé
             hasExtractionError = false; // Réinitialiser l'état d'erreur d'extraction
-            logContent.classList.add('bg-gray-100', 'max-h-96', 'overflow-y-auto', 'p-4', 'rounded-lg');
+            logContent.classList.add('bg-gray-100', 'max-h-96', 'overflow-y-auto', 'p-4', 'rounded-lg', 'dark:bg-gray-800');
         }
         updateProgress(0, 0, 'Initialisation...');
     } else {
         console.error('Modal logModal non trouvé');
     }
 }
-
 function closeLogModal() {
     const logModal = document.getElementById('logModal');
     if (logModal) {
@@ -206,29 +242,29 @@ function appendSummaryTable() {
     const logContent = document.getElementById('logContent');
     if (logContent) {
         logContent.innerHTML += `
-            <table class="w-full border-collapse mt-4 bg-white shadow-md">
+            <table class="w-full border-collapse mt-4 bg-white shadow-md dark:bg-gray-800 dark:shadow-none">
                 <thead>
                     <tr>
-                        <th class="bg-gray-200 text-left p-2 font-bold text-gray-700">Métrique</th>
-                        <th class="bg-gray-200 text-left p-2 font-bold text-gray-700">Valeur</th>
+                        <th class="bg-gray-200 text-left p-2 font-bold text-gray-700 dark:bg-gray-700 dark:text-gray-200">Métrique</th>
+                        <th class="bg-gray-200 text-left p-2 font-bold text-gray-700 dark:bg-gray-700 dark:text-gray-200">Valeur</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td class="p-2 border-b border-gray-300 text-gray-600">Temps écoulé</td>
-                        <td class="p-2 border-b border-gray-300 text-gray-600">${summary.duration.toFixed(2)}s</td>
+                        <td class="p-2 border-b border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-300">Temps écoulé</td>
+                        <td class="p-2 border-b border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-300">${summary.duration.toFixed(2)}s</td>
                     </tr>
                     <tr>
-                        <td class="p-2 border-b border-gray-300 text-gray-600">Jeux convertis</td>
-                        <td class="p-2 border-b border-gray-300 text-gray-600">${summary.convertedGames}</td>
+                        <td class="p-2 border-b border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-300">Jeux convertis</td>
+                        <td class="p-2 border-b border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-300">${summary.convertedGames}</td>
                     </tr>
                     <tr>
-                        <td class="p-2 border-b border-gray-300 text-gray-600">Jeux ignorés</td>
-                        <td class="p-2 border-b border-gray-300 text-gray-600">${summary.skippedGames}</td>
+                        <td class="p-2 border-b border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-300">Jeux ignorés</td>
+                        <td class="p-2 border-b border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-300">${summary.skippedGames}</td>
                     </tr>
                     <tr>
-                        <td class="p-2 text-gray-600">Erreurs</td>
-                        <td class="p-2 text-gray-600">${summary.errorCount}</td>
+                        <td class="p-2 text-gray-600 dark:text-gray-300">Erreurs</td>
+                        <td class="p-2 text-gray-600 dark:text-gray-300">${summary.errorCount}</td>
                     </tr>
                 </tbody>
             </table>
@@ -422,4 +458,3 @@ async function extractWsquashFS() {
         alert(`Erreur: ${error.message}`);
     }
 }
-
