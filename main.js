@@ -70,9 +70,12 @@ function createWindow() {
         }
     };
 
-    if (screenWidth <= 1366 && screenHeight <= 768) {
-        // Plein écran pour petites résolutions
-        options.fullscreen = true;
+    if (screenWidth <= 1920 && screenHeight <= 1080) {
+        //pour petites résolutions
+        options.width = 1280;
+        options.height = 800;
+        options.x = Math.floor((screenWidth - 1280) / 2);
+        options.y = Math.floor((screenHeight - 800) / 2);
     } else {
         // Fenêtre 1920x1080 centrée pour grandes résolutions
         options.width = 1920;
