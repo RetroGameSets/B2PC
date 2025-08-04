@@ -3,5 +3,6 @@ LOG/
 ressources/style.css
 out/
 node_modules
+.vscode/
 *.iso
 .vs/
