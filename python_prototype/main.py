@@ -519,7 +519,10 @@ class B2PCMainWindow(QMainWindow):
     def init_ui(self):
         """Initialise l'interface utilisateur"""
         self.setWindowTitle("B2PC - Batch Retro Games Converter")
-        self.setFixedSize(1000, 700)
+        
+        # Taille minimale et initiale (redimensionnable)
+        self.setMinimumSize(800, 600)
+        self.resize(1000, 700)
         
         # Widget central
         central_widget = QWidget()
@@ -568,14 +571,23 @@ class B2PCMainWindow(QMainWindow):
         parent_layout.addLayout(header_layout)
     
     def create_folder_section(self, parent_layout):
-        """Crée la section de sélection des dossiers"""
-        folder_layout = QGridLayout()
+        """Crée la section de sélection des dossiers (responsive)"""
+        folder_container = QWidget()
+        folder_layout = QVBoxLayout(folder_container)
         folder_layout.setSpacing(15)
         
+        # Container pour les deux sections de dossiers
+        folders_row = QHBoxLayout()
+        folders_row.setSpacing(20)
+        
         # Dossier source
+        source_container = QWidget()
+        source_layout = QVBoxLayout(source_container)
+        source_layout.setContentsMargins(0, 0, 0, 0)
+        
         source_label = QLabel("Dossier source (Archives autorisées):")
         source_label.setStyleSheet("font-size: 16px; font-weight: 600; color: #1f2937;")
-        folder_layout.addWidget(source_label, 0, 0)
+        source_layout.addWidget(source_label)
         
         source_row = QHBoxLayout()
         self.source_input = QLineEdit()
@@ -588,14 +600,17 @@ class B2PCMainWindow(QMainWindow):
         self.source_button.clicked.connect(self.select_source_folder)
         source_row.addWidget(self.source_button)
         
-        source_widget = QWidget()
-        source_widget.setLayout(source_row)
-        folder_layout.addWidget(source_widget, 1, 0)
+        source_layout.addLayout(source_row)
+        folders_row.addWidget(source_container)
         
         # Dossier destination
+        dest_container = QWidget()
+        dest_layout = QVBoxLayout(dest_container)
+        dest_layout.setContentsMargins(0, 0, 0, 0)
+        
         dest_label = QLabel("Dossier destination:")
         dest_label.setStyleSheet("font-size: 16px; font-weight: 600; color: #1f2937;")
-        folder_layout.addWidget(dest_label, 0, 1)
+        dest_layout.addWidget(dest_label)
         
         dest_row = QHBoxLayout()
         self.dest_input = QLineEdit()
@@ -608,16 +623,29 @@ class B2PCMainWindow(QMainWindow):
         self.dest_button.clicked.connect(self.select_dest_folder)
         dest_row.addWidget(self.dest_button)
         
-        dest_widget = QWidget()
-        dest_widget.setLayout(dest_row)
-        folder_layout.addWidget(dest_widget, 1, 1)
+        dest_layout.addLayout(dest_row)
+        folders_row.addWidget(dest_container)
         
-        parent_layout.addLayout(folder_layout)
+        folder_layout.addLayout(folders_row)
+        parent_layout.addWidget(folder_container)
     
     def create_conversion_section(self, parent_layout):
-        """Crée la section des boutons de conversion"""
-        conversion_layout = QGridLayout()
-        conversion_layout.setSpacing(20)
+        """Crée la section des boutons de conversion (responsive)"""
+        # Import pour le scroll
+        from PyQt6.QtWidgets import QScrollArea
+        
+        # Container principal pour les boutons avec scroll
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        
+        conversion_container = QWidget()
+        self.conversion_layout = QGridLayout(conversion_container)
+        self.conversion_layout.setSpacing(20)
+        
+        # Stocker les groupes pour le redimensionnement
+        self.button_groups = []
         
         # Colonne 1: Conversion
         conv_group = self.create_button_group(
@@ -631,7 +659,7 @@ class B2PCMainWindow(QMainWindow):
                 ("PS1 to PSP EBOOT", None, "#22c55e", True)   # Désactivé
             ]
         )
-        conversion_layout.addWidget(conv_group, 0, 0)
+        self.button_groups.append(conv_group)
         
         # Colonne 2: Compression / Décompression
         compress_group = self.create_button_group(
@@ -641,7 +669,7 @@ class B2PCMainWindow(QMainWindow):
                 ("Décompression wSquashFS", self.extract_wsquashfs, "#eab308")
             ]
         )
-        conversion_layout.addWidget(compress_group, 0, 1)
+        self.button_groups.append(compress_group)
         
         # Colonne 3: Outils
         tools_group = self.create_button_group(
@@ -650,10 +678,77 @@ class B2PCMainWindow(QMainWindow):
                 ("Patch Xbox ISO", self.patch_xbox_iso, "#a855f7")
             ]
         )
-        conversion_layout.addWidget(tools_group, 0, 2)
+        self.button_groups.append(tools_group)
         
-        parent_layout.addLayout(conversion_layout)
+        # Layout initial (3 colonnes)
+        self.arrange_button_groups()
+        
+        scroll_area.setWidget(conversion_container)
+        parent_layout.addWidget(scroll_area)
     
+    def arrange_button_groups(self):
+        """Arrange les groupes de boutons selon la taille de la fenêtre"""
+        # Supprimer tous les widgets du layout
+        for i in reversed(range(self.conversion_layout.count())):
+            item = self.conversion_layout.itemAt(i)
+            if item:
+                child = item.widget()
+                if child:
+                    self.conversion_layout.removeWidget(child)
+        
+        # Obtenir la largeur de la fenêtre
+        window_width = self.width()
+        
+        # Points de rupture optimisés pour éviter les superpositions
+        if window_width >= 1100:  # 3 colonnes - seuil augmenté
+            # 3 colonnes pour écrans larges
+            for i, group in enumerate(self.button_groups):
+                self.conversion_layout.addWidget(group, 0, i)
+            self.conversion_layout.setSpacing(20)
+            
+        elif window_width >= 800:  # 2 colonnes
+            # 2 colonnes pour écrans moyens
+            for i, group in enumerate(self.button_groups):
+                row = i // 2
+                col = i % 2
+                self.conversion_layout.addWidget(group, row, col)
+            self.conversion_layout.setSpacing(15)
+            
+        else:  # 1 colonne
+            # Mode vertical pour petites fenêtres (1 colonne)
+            for i, group in enumerate(self.button_groups):
+                self.conversion_layout.addWidget(group, i, 0)
+            self.conversion_layout.setSpacing(10)
+        
+        # Appliquer les styles responsifs
+        self.apply_responsive_styles(window_width)
+    
+    def apply_responsive_styles(self, width):
+        """Applique des styles responsifs selon la largeur"""
+        if hasattr(self, 'conversion_buttons'):
+            if width < 800:
+                # Petits écrans - boutons plus compacts
+                button_height = 35
+                font_size = "14px"
+            elif width < 1100:
+                # Écrans moyens - taille normale
+                button_height = 40
+                font_size = "15px"
+            else:
+                # Grands écrans - boutons plus larges
+                button_height = 45
+                font_size = "16px"
+            
+            # Appliquer les styles à tous les boutons
+            for button in self.conversion_buttons:
+                button.setMinimumHeight(button_height)
+                current_style = button.styleSheet()
+                # Mettre à jour la taille de police dans le style
+                if "font-size:" in current_style:
+                    import re
+                    new_style = re.sub(r'font-size:\s*\d+px', f'font-size: {font_size}', current_style)
+                    button.setStyleSheet(new_style)
+                
     def create_button_group(self, title, buttons):
         """Crée un groupe de boutons avec titre"""
         group_widget = QWidget()
@@ -687,6 +782,7 @@ class B2PCMainWindow(QMainWindow):
                         border-radius: 6px;
                         font-weight: bold;
                         opacity: 0.5;
+                        margin: 5px 0px;
                     }}
                 """)
             else:
@@ -697,6 +793,7 @@ class B2PCMainWindow(QMainWindow):
                         border: none;
                         border-radius: 6px;
                         font-weight: bold;
+                        margin: 5px 0px;
                     }}
                     QPushButton:hover {{
                         background-color: {self.darken_color(color)};
@@ -837,6 +934,33 @@ class B2PCMainWindow(QMainWindow):
         if hasattr(self, 'conversion_buttons'):
             for button in self.conversion_buttons:
                 button.setEnabled(folders_selected)
+    
+    def resizeEvent(self, event):
+        """Événement de redimensionnement - réarrange les boutons et adapte les marges"""
+        super().resizeEvent(event)
+        
+        # Adapter les marges selon la taille de la fenêtre
+        window_width = self.width()
+        if window_width < 800:
+            margin = 10
+        elif window_width < 1000:
+            margin = 20
+        else:
+            margin = 40
+        
+        # Mettre à jour les marges du layout principal
+        try:
+            central_widget = self.centralWidget()
+            if central_widget:
+                layout = central_widget.layout()
+                if layout:
+                    layout.setContentsMargins(margin, 20, margin, 20)
+        except Exception:
+            pass  # Ignorer les erreurs de layout
+        
+        # Réarranger les groupes de boutons si ils existent
+        if hasattr(self, 'button_groups') and hasattr(self, 'conversion_layout'):
+            self.arrange_button_groups()
     
     def select_source_folder(self):
         """Sélectionne le dossier source"""
