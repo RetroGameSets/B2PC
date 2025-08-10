@@ -23,11 +23,15 @@ Prototype Python pour l'application B2PC (Backup to PC) avec interface PyQt6 et 
 ```
 python_prototype/
 ├── main.py              # Interface PyQt6 principale
-├── handlers.py          # Handlers de conversion (4 types)
+├── handlers/            # Package des handlers de conversion
+│   ├── base.py          # Base ConversionHandler (outils, logs, progrès)
+│   ├── chdv5.py         # CHD v5
+│   ├── rvz.py           # RVZ
+│   ├── squashfs.py      # wSquashFS (compress/extract)
+│   └── xbox_patch.py    # Patch Xbox ISO
 ├── requirements.txt     # Dépendances Python
-├── README.md           # Cette documentation
-├── test_*.py           # Suites de tests
-└── LOG/                # Journaux de conversion
+├── README.md            # Cette documentation
+└── LOG/                 # Journaux de conversion
 ```
 
 ## 🛠️ Installation
@@ -97,23 +101,7 @@ if match := re.search(progress_pattern, line):
 
 ## 🧪 Tests
 
-### Suites de tests disponibles
-```bash
-# Test basique des handlers
-python test_handlers.py
-
-# Test extract-on-the-fly
-python test_extract_on_the_fly.py
-
-# Test mécanisme d'arrêt
-python test_stop_system.py
-
-# Test correction SquashFS
-python test_squashfs_real_fix.py
-
-# Test de régression complet
-python test_regression_final.py
-```
+Des tests automatisés pourront être ajoutés ultérieurement.
 
 ## 📋 Journal des Modifications
 
@@ -197,7 +185,6 @@ Les logs détaillés sont disponibles dans :
 
 ✅ **Threading asynchrone**
 - WorkerThread pour éviter le freeze de l'UI
-- Simulation d'opérations de conversion
 - Gestion des signaux PyQt6
 
 ## Structure du code
@@ -238,4 +225,4 @@ cd python_prototype
 python main.py
 ```
 
-Le prototype simule les conversions avec des barres de progression et logs réalistes.
+Le prototype exécute des conversions réelles avec barres de progression et logs détaillés.

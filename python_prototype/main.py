@@ -5,7 +5,6 @@ Version Python/PyQt6 avec l'interface parfaite de main.py.bak
 """
 
 import sys
-import os
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
@@ -14,25 +13,17 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QPixmap, QIcon
+from typing import Optional
 import logging
 from datetime import datetime
 import subprocess
-import threading
-import queue
-import time
-import random
-
-# Import des handlers réels (avec fallback)
-try:
-    from handlers import ChdV5Handler, RvzHandler, SquashFSHandler, XboxPatchHandler # type: ignore
-    REAL_HANDLERS_AVAILABLE = True
-    print("✅ Tous les handlers importés avec succès")
-except ImportError as e:
-    REAL_HANDLERS_AVAILABLE = False
-    print(f"⚠️ Handlers réels non disponibles - Mode simulation activé: {str(e)}")
-except Exception as e:
-    REAL_HANDLERS_AVAILABLE = False
-    print(f"⚠️ Erreur lors de l'import des handlers: {str(e)}")
+# Import des handlers réels (strict, sans simulation)
+from handlers.chdv5 import ChdV5Handler
+from handlers.rvz import RvzHandler
+from handlers.squashfs import SquashFSHandler
+from handlers.xbox_patch import XboxPatchHandler
+from handlers.base import ConversionHandler
+print("✅ Handlers importés (structure modules)")
 
 class LogHandler(logging.Handler):
     """Handler personnalisé pour rediriger les logs vers l'interface"""
@@ -56,7 +47,7 @@ class WorkerThread(QThread):
         self.source_folder = source_folder
         self.dest_folder = dest_folder
         self.log_file = None
-        self.handler = None  # Référence au handler pour pouvoir l'arrêter
+        self.handler: Optional[ConversionHandler] = None  # Référence au handler pour pouvoir l'arrêter
         self.setup_logging()
     
     def stop_conversion(self):
@@ -104,26 +95,21 @@ class WorkerThread(QThread):
         self.log_message.emit(message)
 
     def run(self):
-        """Exécute la conversion (réelle si handlers disponibles, sinon simulation)"""
+        """Exécute la conversion (mode réel uniquement)"""
         try:
             self.log_both(f"🚀 Début de l'opération : {self.operation}")
             self.log_both(f"📁 Dossier source: {self.source_folder}")
             self.log_both(f"📁 Dossier destination: {self.dest_folder}")
             
-            # Vérifier si on peut faire une vraie conversion
-            if REAL_HANDLERS_AVAILABLE:
-                self.log_both("⚡ Mode conversion réelle activé")
-                results = self.run_real_conversion()
-            else:
-                self.log_both("🎭 Mode simulation activé (handlers non disponibles)")
-                results = self.run_simulation()
+            # Conversion réelle obligatoire
+            self.log_both("⚡ Mode conversion réelle activé")
+            results = self.run_real_conversion()
             
             self.log_both("=" * 50)
             self.log_both("🎉 Opération terminée avec succès!")
             self.log_both(f"📄 Log sauvegardé: {self.log_file}")
             
             self.finished.emit(results)
-            
         except Exception as e:
             error_msg = f"❌ Erreur critique : {str(e)}"
             self.log_both(error_msg)
@@ -166,152 +152,23 @@ class WorkerThread(QThread):
             # Exécuter la conversion
             self.progress_update.emit(20, "Conversion en cours")
             
-            if "Compression" in self.operation:
-                results = self.handler.compress()
-            elif "Extraction" in self.operation or "Extract" in self.operation or "Décompression" in self.operation:
-                results = self.handler.extract()
+            # Pour SquashFSHandler, on peut appeler compress/extract selon l'opération
+            if isinstance(self.handler, SquashFSHandler):
+                if "Compression" in self.operation:
+                    results = self.handler.compress()
+                elif "Extraction" in self.operation or "Extract" in self.operation or "Décompression" in self.operation:
+                    results = self.handler.extract()
+                else:
+                    results = self.handler.convert()
             else:
+                # Pour tous les autres handlers, toujours .convert()
                 results = self.handler.convert()
             
             return results
             
         except Exception as e:
             self.log_both(f"❌ Erreur handler réel: {str(e)}")
-            self.log_both("🎭 Basculement vers simulation...")
-            return self.run_simulation()
-
-    def run_simulation(self):
-        """Simule une opération de conversion réaliste avec logs"""
-        # Validation des outils
-        self.progress_update.emit(5, "Validation des outils")
-        self.msleep(300)
-        
-        tools = {
-            "CHD": ["chdman.exe", "7za.exe"],
-            "RVZ": ["dolphin-tool.exe"],
-            "Xbox": ["xiso.exe"],
-            "wSquashFS": ["gensquashfs.exe", "unsquashfs.exe"]
-        }
-        
-        relevant_tools = []
-        for key, tool_list in tools.items():
-            if key in self.operation:
-                relevant_tools.extend(tool_list)
-        
-        if not relevant_tools:
-            relevant_tools = ["7za.exe", "chdman.exe"]
-        
-        for tool in relevant_tools:
-            self.msleep(150)
-            self.log_both(f"✅ {tool} trouvé et fonctionnel")
-        
-        # Analyse des fichiers
-        self.progress_update.emit(15, "Analyse des fichiers")
-        self.msleep(500)
-        self.log_both("🔍 Recherche des fichiers compatibles...")
-        
-        # Simulation de fichiers trouvés selon l'opération
-        if "CHD" in self.operation:
-            files = ["Final Fantasy VII (USA).bin", "Metal Gear Solid (USA).bin", "Crash Bandicoot (USA).bin"]
-            output_ext = "chd"
-        elif "RVZ" in self.operation:
-            files = ["Metroid Prime (USA).iso", "Super Mario Galaxy (USA).iso", "Zelda Wind Waker (USA).iso"]
-            output_ext = "rvz"
-        elif "Xbox" in self.operation:
-            files = ["Halo (USA).iso", "Fable (USA).iso", "Forza Motorsport (USA).iso"]
-            output_ext = "iso (patched)"
-        elif "wSquashFS" in self.operation:
-            files = ["ROMS_Collection.7z", "Games_Archive.zip", "Retro_Games.rar"]
-            output_ext = "wbfs" if "Compression" in self.operation else "extracted"
-        else:
-            files = ["Game1.iso", "Game2.bin", "Game3.cue"]
-            output_ext = "converted"
-        
-        self.msleep(800)
-        self.log_both(f"📊 {len(files)} fichier(s) trouvé(s) pour la conversion")
-        
-        # Traitement des fichiers
-        converted = 0
-        errors = 0
-        total_files = len(files)
-        
-        for i, filename in enumerate(files):
-            base_progress = 25 + (i / total_files) * 65
-            self.progress_update.emit(int(base_progress), f"Traitement {i+1}/{total_files}")
-            
-            self.log_both(f"🔄 Début traitement: {filename}")
-            
-            # Simulation du temps de traitement variable
-            processing_steps = random.randint(8, 15)
-            for j in range(processing_steps):
-                self.msleep(random.randint(100, 300))
-                step_progress = base_progress + (j / processing_steps) * (65 / total_files)
-                
-                if j == 2:
-                    self.log_both(f"   📖 Lecture des métadonnées de {filename}")
-                elif j == 5:
-                    self.log_both(f"   ⚙️ Application de l'algorithme de conversion")
-                elif j == processing_steps - 3:
-                    self.log_both(f"   💾 Écriture du fichier de sortie")
-                
-                self.progress_update.emit(int(step_progress), f"Conversion: {filename}")
-            
-            # Simulation succès/erreur (90% de succès)
-            if random.random() < 0.9:
-                output_name = filename.replace(Path(filename).suffix, f".{output_ext}")
-                self.log_both(f"✅ Succès: {filename} → {output_name}")
-                
-                # Informations détaillées
-                original_size = random.randint(50, 800)  # MB
-                if "Compression" in self.operation:
-                    new_size = int(original_size * random.uniform(0.3, 0.7))
-                    compression_ratio = int((1 - new_size/original_size) * 100)
-                    self.log_both(f"   📉 Taille: {original_size}MB → {new_size}MB (compression {compression_ratio}%)")
-                else:
-                    self.log_both(f"   📏 Taille traitée: {original_size}MB")
-                
-                converted += 1
-            else:
-                error_reasons = [
-                    "fichier corrompu détecté",
-                    "format non supporté",
-                    "erreur d'écriture disque",
-                    "métadonnées invalides"
-                ]
-                reason = random.choice(error_reasons)
-                self.log_both(f"❌ Échec: {filename} - {reason}")
-                errors += 1
-            
-            self.msleep(200)
-        
-        # Finalisation
-        self.progress_update.emit(90, "Finalisation")
-        self.msleep(500)
-        self.log_both("🧹 Nettoyage des fichiers temporaires...")
-        self.msleep(300)
-        self.log_both("🔍 Vérification de l'intégrité des fichiers générés...")
-        self.msleep(400)
-        
-        self.progress_update.emit(100, "Terminé")
-        
-        # Résumé détaillé
-        duration = (len(files) * random.uniform(1.2, 2.8))
-        self.log_both(f"📈 Statistiques finales:")
-        self.log_both(f"   🎮 Fichiers traités: {converted}/{total_files}")
-        self.log_both(f"   ❌ Erreurs rencontrées: {errors}")
-        self.log_both(f"   ⏱️ Durée totale: {duration:.1f}s")
-        self.log_both(f"   ✅ Taux de réussite: {(converted/total_files)*100:.1f}%")
-        
-        if converted > 0:
-            self.log_both(f"📁 Fichiers générés disponibles dans: {self.dest_folder}")
-        
-        return {
-            'converted_games': converted,
-            'skipped_games': 0,
-            'error_count': errors,
-            'duration': duration,
-            'total_files': total_files
-        }
+            raise
 
 class LogDialog(QDialog):
     """Dialog modal pour afficher les logs"""
@@ -820,7 +677,7 @@ class B2PCMainWindow(QMainWindow):
         footer_layout.setContentsMargins(0, 20, 0, 0)
         
         # Version avec statut handlers
-        handler_status = "Conversion Réelle" if REAL_HANDLERS_AVAILABLE else "Mode Simulation"
+        handler_status = "Conversion Réelle"
         version_text = f"RetroGameSets 2025 // Version 3.4.2 (Python - {handler_status})"
         version_label = QLabel(version_text)
         version_label.setStyleSheet("color: #6b7280; font-size: 12px;")
