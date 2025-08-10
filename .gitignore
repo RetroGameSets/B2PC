@@ -6,3 +6,5 @@ node_modules
 .vscode/
 *.iso
 .vs/
+.venv/
+python_prototype/__pycache__/
