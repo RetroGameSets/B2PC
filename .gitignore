@@ -5,4 +5,4 @@ LOG/
 _pycache__/
 dist/
 build/
-OLD_ELECTRON/
+OLD_ELECTRON/*
