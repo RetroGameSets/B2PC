@@ -1,82 +1,228 @@
-![Logo B2PC](ressources/images/logo.png)
-# Batch Games Converter (B2PC)
+# B2PC - Prototype Python
 
-![Screenshot](https://github.com/RetroGameSets/B2PC/blob/main/B2PC%20Home%20screen.png)
-![Screenshot](https://github.com/RetroGameSets/B2PC/blob/main/B2PC%20Log%20screen.png)
+## Vue d'ensemble
+Prototype Python pour l'application B2PC (Backup to PC) avec interface PyQt6 et handlers de conversion complets.
 
-**Batch Games Converter (B2PC)** est une application de bureau conçue pour simplifier la conversion, l'extraction et le traitement des ROMs de jeux rétro pour divers systèmes, notamment PS1, PS2, Dreamcast, PCEngineCD, SegaCD, Saturn, Xbox, GameCube et Wii. Développée par RetroGameSets.fr, B2PC vise à offrir une interface utilisateur intuitive pour automatiser des tâches comme la conversion de formats de fichiers, l'extraction de contenus, et le patchage pour la compatibilité avec des émulateurs modernes.
+## 🚀 Fonctionnalités Principales
 
-> **Note** : B2PC est en cours de développement actif. Certaines fonctionnalités sont actuellement disponibles, avec de nouvelles améliorations prévues à l'avenir. Dernière mise à jour : 25 mai 2025.
+### Conversions Supportées
+- **CHD v5** : Conversion ISO → CHD avec `chdman.exe`
+- **RVZ** : Compression Wii/GameCube ISO → RVZ avec `dolphin-tool.exe`  
+- **SquashFS** : Compression dossiers → SquashFS avec `gensquashfs.exe`
+- **Xbox ISO** : Patch et conversion Xbox ISO avec `xiso.exe`
 
-## Fonctionnalités actives
+### Améliorations Récentes ✨
+- ✅ **Progression temps réel** : Affichage du pourcentage d'avancement pendant les conversions
+- ✅ **Extract-on-the-fly** : Extraction intelligente archive par archive (économie d'espace)
+- ✅ **Mécanisme d'arrêt** : Possibilité d'interrompre les conversions en cours
+- ✅ **Nettoyage automatique** : Suppression des fichiers temporaires Xbox
+- ✅ **Gestion dossiers** : Correction SquashFS pour dossiers avec noms d'extension (ex: "Game.pc")
 
-### 1. Conversion CUE/GDI/ISO en CHD v5
-- **Description** : Convertit les fichiers `.iso`, `.cue`, et `.gdi` (avec leurs fichiers `.bin` associés) en format `.chd` (version 5) pour une meilleure compatibilité avec les émulateurs comme RetroArch.
-- **Détails** :
-  - Gère les fichiers directement dans le dossier source ou dans des archives (`.zip`, `.7z`, `.gz`, `.rar`).
-  - Extrait les archives dans le dossier source, convertit les fichiers en `.chd`, et place les résultats dans un sous-dossier `CHD` du dossier destination.
-  - Supprime automatiquement les fichiers extraits après conversion pour éviter l’encombrement.
-  - Fournit des logs détaillés (ex. « Compression complete ... final ratio = 65.6% ») et une barre de progression pour suivre l’avancement.
-  - Affiche les erreurs critiques et un résumé final (jeux convertis, ignorés, erreurs).
-- **Utilisation** : Sélectionnez un dossier source contenant des fichiers ou archives, un dossier destination, et cliquez sur **CUE/GDI/ISO to CHD v5** dans l’onglet **Conversion**.
+## 📁 Structure du Projet
 
-### 2. Extraction CHD
-- **Description** : Extrait les fichiers `.chd` pour restaurer leurs contenus originaux (`.iso`, `.cue`, ou `.gdi` avec `.bin`) afin de permettre des modifications ou une vérification.
-- **Détails** :
-  - Traite les fichiers `.chd` directement dans le dossier source ou extraits depuis des archives (`.zip`, `.7z`, `.gz`, `.rar`).
-  - Extrait les contenus dans le dossier source et place les fichiers restaurés dans un sous-dossier `Extracted` du dossier destination.
-  - Supprime automatiquement les fichiers temporaires après extraction.
-  - Fournit des logs détaillés et une barre de progression pour suivre l’opération.
-  - Gère les erreurs (ex. fichiers CHD invalides) avec des notifications claires.
-- **Utilisation** : Sélectionnez un dossier source contenant des fichiers `.chd` ou des archives, un dossier destination, et cliquez sur **Extract CHD** dans l’onglet **Conversion**.
+```
+python_prototype/
+├── main.py              # Interface PyQt6 principale
+├── handlers/            # Package des handlers de conversion
+│   ├── base.py          # Base ConversionHandler (outils, logs, progrès)
+│   ├── chdv5.py         # CHD v5
+│   ├── rvz.py           # RVZ
+│   ├── squashfs.py      # wSquashFS (compress/extract)
+│   └── xbox_patch.py    # Patch Xbox ISO
+├── requirements.txt     # Dépendances Python
+├── README.md            # Cette documentation
+└── LOG/                 # Journaux de conversion
+```
 
-### 3. Merge bin /cue
-- **Description** : Fusion des jeux au format .cue avec multiples fichiers .bin pour ceux qui souhaitent conserver ce format de fichier, mais pas un grand nombre de fichiers .bin (track01, track02, ...)
-- **Détails** :
-  - Traite les fichiers `.cue` et leurs `.bin` associés directement dans le dossier source ou extraits depuis des archives (`.zip`, `.7z`, `.gz`, `.rar`).
-  - Extrait les contenus dans le dossier source et converti en CHD les fichiers temporaires dans un sous-dossier `CHD_TEMP` du dossier destination, puis extrait le CHD en un seul BIN/CUE dans le dossier Merged_CUE.
-  - Supprime automatiquement les fichiers temporaires CHD après conversion.
-  - Fournit des logs détaillés et une barre de progression pour suivre l’opération.
-  - Gère les erreurs (ex. fichiers avec un seul BIN, ou BIN manquant dans la liste du CUE) avec des notifications claires.
-- **Utilisation** : Sélectionnez un dossier source contenant des fichiers `.cue` et `.bin` ou des archives, un dossier destination, et cliquez sur **Merge BIN/CUE** dans l’onglet **Conversion**.
+## 🛠️ Installation
 
-### 4. Patch XBOX ISO pour xemu
-- **Description** : Patche les fichiers ISO Xbox Classic pour les rendre compatibles avec l’émulateur xemu.
-- **Détails** :
-  - Traite les fichiers `.iso` directement dans le dossier source ou extraits depuis des archives (`.zip`, `.7z`, `.gz`, `.rar`).
-  - Extrait les archives dans le dossier source, patche les ISO avec `xiso.exe`, et place les résultats dans un sous-dossier `xbox` du dossier destination.
-  - Supprime les fichiers extraits après conversion.
-  - Fournit des logs détaillés et une barre de progression.
-  - Affiche un résumé des jeux patchés, ignorés, et des erreurs rencontrées.
-- **Utilisation** : Sélectionnez un dossier source avec des ISO ou archives Xbox, un dossier destination, et cliquez sur **Patch XBOX ISO xemu** dans l’onglet **Patch**.
+### Prérequis
+- Python 3.8+
+- Outils externes (dans `../ressources/`) :
+  - `chdman.exe` (MAME CHD Manager)
+  - `dolphin-tool.exe` (Dolphin Emulator) 
+  - `gensquashfs.exe` / `unsquashfs.exe` (SquashFS)
+  - `xiso.exe` (Xbox ISO)
+  - `7za.exe` (7-Zip)
 
-### 5. Conversion / Compression Gamecube ISO en RVZ pour Dolphin
-- **Description** : Convertit et compresse les fichiers ISO Gamecube/Wii en format `.rvz` pour un gain de place et une meilleure compatibilité avec l’émulateur Dolphin.
-- **Détails** :
-  - Traite les fichiers `.iso` directement dans le dossier source ou extraits depuis des archives (`.zip`, `.7z`, `.gz`, `.rar`).
-  - Extrait les archives dans le dossier source, convertit les ISO en `.rvz` avec `DolphinTool.exe`, et place les résultats dans un sous-dossier `RVZ` du dossier destination.
-  - Supprime les fichiers extraits après conversion.
-  - Fournit des logs détaillés (ex. « Compressing, 50.0% complete ») et une double barre de progression (totale et fichier en cours).
-  - Vérifie la compatibilité des ISO avant conversion et gère les erreurs (ex. fichiers incompatibles).
-- **Utilisation** : Sélectionnez un dossier source avec des ISO ou archives Gamecube/Wii, un dossier destination, et cliquez sur **Convert ISO to RVZ** dans l’onglet **Conversion**.
+### Installation des dépendances
+```bash
+cd python_prototype
+pip install -r requirements.txt
+```
 
-## Prérequis
+## 🎮 Utilisation
 
-- **Système d’exploitation** : Windows (testé sur Windows 10/11).
-- **Outils inclus** :
-  - `7za.exe` (gestion des archives).
-  - `chdman.exe` (conversion et extraction en CHD).
-  - `xiso.exe` (patchage Xbox).
-  - `DolphinTool.exe` (conversion en RVZ).
-- **Espace disque** : Prévoir de l’espace pour les fichiers extraits, convertis, et restaurés.
+### Lancement de l'interface
+```bash
+python main.py
+```
 
-## Télécharger B2PC
-Téléchargez la dernière version bêta pour Windows depuis [GitHub Releases](https://github.com/RetroGameSets/B2PC/releases).
+### Interface PyQt6
+- **Sélection source** : Dossier contenant les fichiers à convertir
+- **Sélection destination** : Dossier de sortie des conversions
+- **Choix du type** : CHD v5, RVZ, SquashFS, ou Xbox ISO
+- **Progression** : Barre de progression temps réel + logs détaillés
+- **Contrôles** : Boutons Start/Stop pour gérer les conversions
 
-## Contributions et support
-- **Signaler des bugs** : Ouvrez une issue sur [GitHub](https://github.com/RetroGameSets/B2PC/issues).
-- **Contribuer** : Forkez le dépôt, proposez des pull requests, et consultez les guidelines de contribution.
-- **Contact** : Visitez [RetroGameSets.fr](https://retrogamesets.fr) pour plus d’informations ou du support.
+### Extract-on-the-Fly
+Le système extrait et traite les archives une par une :
+```
+Archive1.7z → Extraction → Conversion → Nettoyage
+Archive2.rar → Extraction → Conversion → Nettoyage
+...
+```
+**Avantages** : Économie d'espace disque, progression granulaire
 
-## Licence
-Ce projet est sous licence [MIT](LICENSE), sauf indication contraire.
+## 🔧 Architecture Technique
+
+### Handlers de Conversion
+Chaque handler hérite de `ConversionHandler` et implémente :
+- `compress()` : Logique de conversion principale
+- `extract()` : Logique d'extraction (si applicable)
+- `get_all_source_files()` : Détection des fichiers sources
+- `check_should_stop()` : Gestion de l'arrêt utilisateur
+
+### Progression Temps Réel
+Parsing intelligent de la sortie des outils avec regex :
+```python
+# Exemple pour chdman.exe
+progress_pattern = r"(\d+)%"
+if match := re.search(progress_pattern, line):
+    percentage = int(match.group(1))
+    self.progress(percentage, f"Conversion en cours...")
+```
+
+### Gestion des Erreurs
+- Validation des outils externes au démarrage
+- Logs détaillés avec timestamps
+- Nettoyage automatique en cas d'erreur
+- Interface utilisateur non-bloquante
+
+## 🧪 Tests
+
+Des tests automatisés pourront être ajoutés ultérieurement.
+
+## 📋 Journal des Modifications
+
+### v2.4 - Correction Handlers SquashFS (Actuel)
+- ✅ **Compression** : Syntaxe `--pack-dir` alignée sur JavaScript (résout erreur code:1)
+- ✅ **Extraction** : Syntaxe `--unpack-path / --unpack-root` corrigée
+- ✅ **Extensions** : Uniformisation .wsquashfs (au lieu de .squashfs)
+- ✅ **Types** : Gestion harmonisée Path/string dans les deux handlers
+
+### v2.3 - Correction SquashFS Dossiers
+- ✅ Correction détection dossiers avec noms d'extension (ex: "Hotshot Racing.pc")
+- ✅ Simplification logique SquashFS (focus dossiers uniquement)
+
+### v2.2 - Nettoyage Xbox
+- ✅ Suppression automatique fichiers temporaires Xbox
+- ✅ Méthode `_cleanup_xbox_temp_files()`
+
+### v2.1 - Mécanisme d'Arrêt
+- ✅ Bouton Stop dans l'interface
+- ✅ Variable `should_stop` pour chaque handler
+- ✅ Arrêt propre des processus externes
+
+### v2.0 - Extract-on-the-Fly
+- ✅ Architecture extract-on-the-fly complète
+- ✅ Économie d'espace disque significative
+- ✅ Progression granulaire par archive
+
+### v1.1 - Progression Temps Réel
+- ✅ Parsing regex de la sortie des outils
+- ✅ Mise à jour barre de progression en direct
+- ✅ Affichage status détaillé
+
+### v1.0 - Version Initiale
+- ✅ Interface PyQt6 de base
+- ✅ 4 handlers de conversion
+- ✅ Import/export de configuration
+
+## 🐛 Problèmes Connus
+
+### Résolus ✅
+- ~~Import handlers non reconnu~~ → Réparé
+- ~~Progression uniquement dans logs~~ → Temps réel implémenté  
+- ~~Extraction bulk inefficace~~ → Extract-on-the-fly développé
+- ~~Impossible d'arrêter conversions~~ → Mécanisme d'arrêt ajouté
+- ~~Erreur SquashFS code:1~~ → **Syntaxe compression/extraction corrigée**
+
+### En cours d'investigation 🔍
+- Aucun problème majeur identifié
+
+## 🤝 Contribution
+
+### Structure de développement
+- `handlers.py` : Logique métier des conversions
+- `main.py` : Interface utilisateur PyQt6  
+- `test_*.py` : Tests unitaires et de régression
+
+### Ajout d'un nouveau handler
+1. Hériter de `ConversionHandler`
+2. Implémenter `compress()` et/ou `extract()`
+3. Ajouter à l'interface dans `main.py`
+4. Créer tests de validation
+
+## 📞 Support
+
+### Logs de débogage
+Les logs détaillés sont disponibles dans :
+- `LOG/B2PC_*_YYYYMMDD_HHMMSS.log`
+- Affichage temps réel dans l'interface
+
+### Diagnostic des problèmes
+1. Vérifier présence des outils externes
+2. Consulter les logs de conversion
+3. Tester avec les suites de tests
+4. Valider les permissions de fichiers
+
+---
+
+**Statut** : ✅ Prototype complet et opérationnel  
+**Version** : 2.4 (Handlers SquashFS corrigés)  
+**Dernière mise à jour** : 2024
+
+✅ **Threading asynchrone**
+- WorkerThread pour éviter le freeze de l'UI
+- Gestion des signaux PyQt6
+
+## Structure du code
+
+- `main.py` : Application principale
+- `LogHandler` : Gestionnaire de logs personnalisé
+- `WorkerThread` : Thread pour opérations longues
+- `LogDialog` : Dialog modal pour logs
+- `B2PCMainWindow` : Fenêtre principale
+
+## Différences avec l'original
+
+### Avantages
+- **Performance** : Démarrage plus rapide
+- **Mémoire** : Consommation réduite
+- **Native** : Interface système native
+- **Maintenance** : Code Python plus simple
+
+### Équivalences parfaites
+- Interface graphique identique
+- Même workflow utilisateur
+- Mêmes fonctionnalités
+- Logs temps réel
+- Mode sombre/clair
+
+## Prochaines étapes
+
+1. **Handlers réels** : Conversion des handlers JavaScript
+2. **Outils externes** : Intégration chdman, 7za, etc.
+3. **Auto-updater** : Système de mise à jour
+4. **Packaging** : Création d'un exécutable
+5. **Tests** : Suite de tests complète
+
+## Exécution
+
+```bash
+cd python_prototype
+python main.py
+```
+
+Le prototype exécute des conversions réelles avec barres de progression et logs détaillés.

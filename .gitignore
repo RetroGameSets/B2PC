@@ -1,12 +1,8 @@
-node_modules/
 LOG/
-ressources/style.css
-out/
-node_modules
 .vscode/
-*.iso
 .vs/
 .venv/
-python_prototype/__pycache__/
-python_prototype/build/
-python_prototype/handlers/__pycache__/
+_pycache__/
+dist/
+build/
+OLD_ELECTRON/
