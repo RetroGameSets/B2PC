@@ -17,7 +17,7 @@ class SquashFSHandler(ConversionHandler):
         dest_path.mkdir(exist_ok=True)
         try:
             source_path = Path(self.source_folder)
-            archives = self.detect_archives(source_path)
+            archives = self.detect_archives(source_path) # type: ignore[attr-defined]
             items_to_compress = []
             for item in source_path.iterdir():
                 if item.is_dir():

@@ -1,0 +1,35 @@
+{
+  "window": {
+    "minWidth": 800,
+    "minHeight": 600,
+    "width": 1024,
+    "height": 720,
+    "margins": {
+      "small": 10,
+      "medium": 20,
+      "large": 40
+    },
+    "breakpoints": {
+      "twoCols": 800,
+      "threeCols": 1023
+    }
+  },
+  "buttons": {
+    "height": {
+      "small": 35,
+      "medium": 40,
+      "large": 45
+    },
+    "fontSize": {
+      "small": 14,
+      "medium": 15,
+      "large": 16
+    }
+  },
+  "colors": {
+    "green": "#22c55e",
+    "yellow": "#eab308",
+    "purple": "#a855f7",
+    "gray": "#6b7280"
+  }
+}

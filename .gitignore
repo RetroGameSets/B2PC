@@ -8,3 +8,5 @@ node_modules
 .vs/
 .venv/
 python_prototype/__pycache__/
+python_prototype/build/
+python_prototype/handlers/__pycache__/

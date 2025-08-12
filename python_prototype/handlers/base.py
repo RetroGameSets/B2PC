@@ -10,7 +10,8 @@ from typing import List, Callable, Optional, Union
 class ConversionHandler:
     """Classe de base pour tous les handlers de conversion"""
     def __init__(self, tools_path: Optional[str] = None, log_callback: Optional[Callable] = None, progress_callback: Optional[Callable] = None):
-        self.tools_path = Path(tools_path) if tools_path else Path("../ressources")
+        # Toujours utiliser 'ressources' comme racine par défaut
+        self.tools_path = Path(tools_path) if tools_path else Path("ressources")
         self.log = log_callback if log_callback else print
         self.progress = progress_callback if progress_callback else lambda p, m: None
         self.source_folder = ""
@@ -19,14 +20,15 @@ class ConversionHandler:
         self.should_stop = False  # Flag pour arrêter la conversion
         self.current_process = None  # Référence au processus en cours
     def validate_tools(self) -> bool:
-        """Valide que tous les outils requis sont présents"""
+        """Valide que tous les outils requis sont présents (compatibilité PyInstaller)"""
+        from main import resource_path
         required_tools = [
-            "7za.exe", "chdman.exe", "dolphin-tool.exe", 
+            "7za.exe", "chdman.exe", "dolphin-tool.exe",
             "xiso.exe", "gensquashfs.exe", "unsquashfs.exe"
         ]
         for tool in required_tools:
-            tool_path = self.tools_path / tool
-            if not tool_path.exists():
+            tool_path = resource_path(f"ressources/{tool}")
+            if not os.path.exists(tool_path):
                 self.log(f"❌ Outil manquant : {tool}")
                 return False
         self.log("✅ Tous les outils sont présents")
@@ -62,13 +64,27 @@ class ConversionHandler:
         """Extraction (optionnelle) - utile pour SquashFSHandler"""
         raise NotImplementedError("extract() non implémenté pour ce handler")
     def run_tool(self, tool_name: str, args: List[str], cwd: Optional[str] = None, show_output: bool = True) -> bool:
-        """Exécute un outil externe avec gestion d'erreurs et progression en temps réel"""
+        """Exécute un outil externe avec gestion d'erreurs, extraction temporaire et sans fenêtre CMD."""
+        import sys, shutil, tempfile
         if self.check_should_stop():
             return False
-        tool_path = self.tools_path / tool_name
+        # Extraction de l'outil dans un dossier temporaire si nécessaire
+        from main import resource_path
+        src_tool_path = resource_path(f"ressources/{tool_name}")
+        temp_dir = tempfile.gettempdir()
+        temp_tool_path = os.path.join(temp_dir, tool_name)
+        if not os.path.exists(temp_tool_path):
+            try:
+                shutil.copy2(src_tool_path, temp_tool_path)
+            except Exception as e:
+                self.log(f"❌ Impossible d'extraire {tool_name} : {e}")
+                return False
+        cmd = [temp_tool_path] + args
+        self.log(f"🔧 Exécution : {' '.join(cmd)}")
+        flags = 0
+        if sys.platform == "win32":
+            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         try:
-            cmd = [str(tool_path)] + args
-            self.log(f"🔧 Exécution : {' '.join(cmd)}")
             if show_output:
                 self.current_process = subprocess.Popen(
                     cmd,
@@ -77,7 +93,8 @@ class ConversionHandler:
                     cwd=cwd,
                     text=True,
                     bufsize=1,
-                    universal_newlines=True
+                    universal_newlines=True,
+                    creationflags=flags
                 )
                 if self.current_process.stdout:
                     while True:
@@ -102,7 +119,8 @@ class ConversionHandler:
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     cwd=cwd,
-                    text=True
+                    text=True,
+                    creationflags=flags
                 )
                 stdout, stderr = self.current_process.communicate()
             if self.check_should_stop():

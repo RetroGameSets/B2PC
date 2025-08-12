@@ -1,29 +1,33 @@
-#!/usr/bin/env python3
-"""
-B2PC - Batch Retro Games Converter
-Version Python/PyQt6 avec l'interface parfaite de main.py.bak
-"""
-
+import os
 import sys
+
+# Fonction utilitaire pour compatibilité PyInstaller
+def resource_path(relative_path):
+    """Retourne le chemin absolu vers une ressource, compatible PyInstaller."""
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path) # type: ignore
+    return os.path.join(os.path.abspath("."), relative_path)
+
+#!/usr/bin/env python3
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QGridLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QProgressBar,
-    QFileDialog, QDialog, QDialogButtonBox, QFrame, QSizePolicy
+    QFileDialog, QDialog
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
-from PyQt6.QtGui import QFont, QPixmap, QIcon
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QFont, QCursor
 from typing import Optional
 import logging
 from datetime import datetime
 import subprocess
-# Import des handlers réels (strict, sans simulation)
 from handlers.chdv5 import ChdV5Handler
 from handlers.rvz import RvzHandler
 from handlers.squashfs import SquashFSHandler
 from handlers.xbox_patch import XboxPatchHandler
 from handlers.base import ConversionHandler
-print("✅ Handlers importés (structure modules)")
+import json
+print("✅ Démarrage")
 
 class LogHandler(logging.Handler):
     """Handler personnalisé pour rediriger les logs vers l'interface"""
@@ -103,7 +107,7 @@ class WorkerThread(QThread):
             
             # Conversion réelle obligatoire
             self.log_both("⚡ Mode conversion réelle activé")
-            results = self.run_real_conversion()
+            results = self.run_conversion()
             
             self.log_both("=" * 50)
             self.log_both("🎉 Opération terminée avec succès!")
@@ -115,13 +119,13 @@ class WorkerThread(QThread):
             self.log_both(error_msg)
             self.finished.emit({'error': str(e)})
 
-    def run_real_conversion(self):
+    def run_conversion(self):
         """Exécute une vraie conversion avec les handlers"""
         self.progress_update.emit(10, "Initialisation des outils")
         
         # Sélectionner le bon handler
         handler = None
-        tools_path = Path("../ressources")  # Chemin vers les outils
+        tools_path = Path("ressources")  # Chemin vers les outils
         
         def log_callback(msg):
             self.log_both(f"🔧 {msg}")
@@ -199,24 +203,7 @@ class LogDialog(QDialog):
         
         # Bouton d'arrêt (rouge)
         self.stop_button = QPushButton("🛑 Arrêter")
-        self.stop_button.setStyleSheet("""
-            QPushButton {
-                background-color: #dc2626;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #b91c1c;
-            }
-            QPushButton:disabled {
-                background-color: #9ca3af;
-                color: #6b7280;
-            }
-        """)
-        self.stop_button.clicked.connect(self.request_stop)
+        self.stop_button.setObjectName("stopButton")
         
         self.close_button = QPushButton("Fermer")
         self.close_button.clicked.connect(self.accept)
@@ -234,9 +221,7 @@ class LogDialog(QDialog):
         button_layout.addWidget(self.close_button)
         layout.addLayout(button_layout)
         
-        # Appliquer le style
-        self.apply_styles()
-    
+
     def set_worker_thread(self, worker_thread):
         """Définit la référence au thread worker pour pouvoir l'arrêter"""
         self.worker_thread = worker_thread
@@ -258,42 +243,6 @@ class LogDialog(QDialog):
             self.add_log("🛑 Conversion arrêtée par l'utilisateur")
         else:
             self.add_log("✅ Conversion terminée")
-    
-    def apply_styles(self):
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #f3f4f6;
-                color: #1f2937;
-            }
-            QTextEdit {
-                background-color: white;
-                border: 1px solid #d1d5db;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Consolas', monospace;
-            }
-            QPushButton {
-                background-color: #6b7280;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #4b5563;
-            }
-            QProgressBar {
-                border: 1px solid #d1d5db;
-                border-radius: 6px;
-                text-align: center;
-                height: 25px;
-            }
-            QProgressBar::chunk {
-                background-color: #10b981;
-                border-radius: 5px;
-            }
-        """)
     
     def add_log(self, message):
         """Ajoute un message au log avec coloration"""
@@ -330,12 +279,9 @@ class LogDialog(QDialog):
         log_dir = Path("LOG")
         if log_dir.exists():
             if sys.platform == "win32":
-                subprocess.run(["explorer", str(log_dir)])
-            elif sys.platform == "darwin":
-                subprocess.run(["open", str(log_dir)])
-            else:
-                subprocess.run(["xdg-open", str(log_dir)])
-    
+                flags = subprocess.CREATE_NO_WINDOW
+                subprocess.run(["explorer", str(log_dir)], creationflags=flags)
+
     def save_current_log(self):
         """Sauvegarde le log actuel affiché"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -369,39 +315,65 @@ class B2PCMainWindow(QMainWindow):
         self.dark_mode = False
         self.current_worker = None
         self.log_dialog = None
-        
+
+        # Charger la configuration UI
+        self.ui_config = self.load_ui_config()
+
         self.init_ui()
         self.apply_styles()
-        
+    
+    def load_ui_config(self):
+        """Charge la configuration UI depuis ui.json (chemin compatible PyInstaller)"""
+        try:
+            ui_json_path = resource_path("ressources/themes/ui.json")
+            if not os.path.exists(ui_json_path):
+                print(f"[ERREUR] Fichier ui.json introuvable : {ui_json_path}")
+                return {}
+            with open(ui_json_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+            if "colors" not in config:
+                print(f"[ERREUR] Clé 'colors' absente dans ui.json. Contenu: {config}")
+            return config
+        except Exception as e:
+            print(f"Erreur lors du chargement de ui.json : {e}")
+            return {}
+
     def init_ui(self):
         """Initialise l'interface utilisateur"""
         self.setWindowTitle("B2PC - Batch Retro Games Converter")
-        
-        # Taille minimale et initiale (redimensionnable)
-        self.setMinimumSize(800, 600)
-        self.resize(1000, 700)
-        
+
+        # Charger les dimensions depuis ui.json
+        window_config = self.ui_config.get("window", {})
+        self.setMinimumSize(window_config.get("minWidth", 800), window_config.get("minHeight", 600))
+        self.resize(window_config.get("width", 1024), window_config.get("height", 700))
+
         # Widget central
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setSpacing(20)
         main_layout.setContentsMargins(40, 20, 40, 20)
-        
+
         # Header avec logo et description
         self.create_header(main_layout)
-        
+
         # Section des dossiers
         self.create_folder_section(main_layout)
-        
+
         # Section des boutons de conversion
         self.create_conversion_section(main_layout)
-        
+
         # Footer
         self.create_footer(main_layout)
-        
+
         # Mettre à jour l'état des boutons
         self.update_button_states()
+
+        # Forcer l'affichage en 3 colonnes par défaut
+        self.arrange_button_groups()
+
+        # Recharger le style après toute l'UI
+        self.apply_styles()
     
     def create_header(self, parent_layout):
         """Crée la section header avec logo et descriptions"""
@@ -410,20 +382,12 @@ class B2PCMainWindow(QMainWindow):
         
         # Logo (placeholder)
         logo_label = QLabel("🎮 B2PC")
+        logo_label.setObjectName("logoLabel")
         logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo_label.setStyleSheet("font-size: 48px; font-weight: bold; color: #1f2937; margin: 10px;")
         header_layout.addWidget(logo_label)
         
-        # Descriptions
-        desc1 = QLabel("Conversion et compression de jeux automatisée")
-        desc1.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        desc1.setStyleSheet("font-size: 16px; font-weight: 600; color: #6b7280; font-style: italic;")
-        header_layout.addWidget(desc1)
-        
-        desc2 = QLabel("Compatible : PS1 / PS2 / Dreamcast / PCEngineCD / SegaCD / Saturn / Xbox / Gamecube / Wii")
-        desc2.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        desc2.setStyleSheet("font-size: 14px; color: #6b7280; font-style: italic; margin-bottom: 20px;")
-        header_layout.addWidget(desc2)
+        # Réduction des marges
+        header_layout.setContentsMargins(0, 10, 0, 10)
         
         parent_layout.addLayout(header_layout)
     
@@ -443,7 +407,7 @@ class B2PCMainWindow(QMainWindow):
         source_layout.setContentsMargins(0, 0, 0, 0)
         
         source_label = QLabel("Dossier source (Archives autorisées):")
-        source_label.setStyleSheet("font-size: 16px; font-weight: 600; color: #1f2937;")
+        source_label.setObjectName("sourceLabel")
         source_layout.addWidget(source_label)
         
         source_row = QHBoxLayout()
@@ -466,7 +430,7 @@ class B2PCMainWindow(QMainWindow):
         dest_layout.setContentsMargins(0, 0, 0, 0)
         
         dest_label = QLabel("Dossier destination:")
-        dest_label.setStyleSheet("font-size: 16px; font-weight: 600; color: #1f2937;")
+        dest_label.setObjectName("destLabel")
         dest_layout.addWidget(dest_label)
         
         dest_row = QHBoxLayout()
@@ -552,27 +516,24 @@ class B2PCMainWindow(QMainWindow):
                 child = item.widget()
                 if child:
                     self.conversion_layout.removeWidget(child)
-        
-        # Obtenir la largeur de la fenêtre
+
+        # Charger les points de rupture depuis ui.json
+        breakpoints = self.ui_config.get("window", {}).get("breakpoints", {})
+        three_cols_breakpoint = breakpoints.get("threeCols", 1023)
+
+        # Forcer 3 colonnes si la largeur est suffisante
         window_width = self.width()
-        
-        # Points de rupture optimisés pour éviter les superpositions
-        if window_width >= 1100:  # 3 colonnes - seuil augmenté
-            # 3 colonnes pour écrans larges
+        if window_width >= three_cols_breakpoint:
             for i, group in enumerate(self.button_groups):
                 self.conversion_layout.addWidget(group, 0, i)
             self.conversion_layout.setSpacing(20)
-            
-        elif window_width >= 800:  # 2 colonnes
-            # 2 colonnes pour écrans moyens
+        elif window_width >= breakpoints.get("twoCols", 800):
             for i, group in enumerate(self.button_groups):
                 row = i // 2
                 col = i % 2
                 self.conversion_layout.addWidget(group, row, col)
             self.conversion_layout.setSpacing(15)
-            
-        else:  # 1 colonne
-            # Mode vertical pour petites fenêtres (1 colonne)
+        else:
             for i, group in enumerate(self.button_groups):
                 self.conversion_layout.addWidget(group, i, 0)
             self.conversion_layout.setSpacing(10)
@@ -611,12 +572,12 @@ class B2PCMainWindow(QMainWindow):
         group_widget = QWidget()
         group_layout = QVBoxLayout(group_widget)
         group_layout.setSpacing(10)
-        
+
         # Titre
         title_label = QLabel(title)
-        title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #1f2937; margin-bottom: 10px;")
+        title_label.setObjectName("buttonGroupTitle")
         group_layout.addWidget(title_label)
-        
+
         # Boutons
         self.conversion_buttons = getattr(self, 'conversion_buttons', [])
         for button_info in buttons:
@@ -625,49 +586,36 @@ class B2PCMainWindow(QMainWindow):
                 disabled = False
             else:
                 text, callback, color, disabled = button_info
-            
+
             button = QPushButton(text)
+            button.setObjectName("conversionButton")
+            # Déterminer la classe couleur
+            color_class = None
+            if color == self.ui_config["colors"]["green"]:
+                color_class = "green"
+            elif color == self.ui_config["colors"]["yellow"]:
+                color_class = "yellow"
+            elif color == self.ui_config["colors"]["purple"]:
+                color_class = "purple"
+            if color_class:
+                button.setProperty("colorClass", color_class)
+                button.setProperty("class", color_class)
+                # On n'ajoute la classe que si le bouton est activé
             button.setMinimumHeight(40)
-            
+
             if disabled:
                 button.setEnabled(False)
-                button.setStyleSheet(f"""
-                    QPushButton {{
-                        background-color: {color};
-                        color: white;
-                        border: none;
-                        border-radius: 6px;
-                        font-weight: bold;
-                        opacity: 0.5;
-                        margin: 5px 0px;
-                    }}
-                """)
+                button.setProperty("disabled", True)
+                # On retire la classe couleur si désactivé
+                button.setStyleSheet("")
             else:
-                button.setStyleSheet(f"""
-                    QPushButton {{
-                        background-color: {color};
-                        color: white;
-                        border: none;
-                        border-radius: 6px;
-                        font-weight: bold;
-                        margin: 5px 0px;
-                    }}
-                    QPushButton:hover {{
-                        background-color: {self.darken_color(color)};
-                    }}
-                    QPushButton:disabled {{
-                        background-color: #d1d5db;
-                        color: #9ca3af;
-                    }}
-                """)
-                
+                button.setProperty("disabled", False)
+                if color_class:
+                    button.setProperty("class", color_class)
                 if callback:
                     button.clicked.connect(callback)
-                
                 self.conversion_buttons.append(button)
-            
             group_layout.addWidget(button)
-        
         group_layout.addStretch()
         return group_widget
     
@@ -675,21 +623,21 @@ class B2PCMainWindow(QMainWindow):
         """Crée le footer avec version et bouton dark mode"""
         footer_layout = QHBoxLayout()
         footer_layout.setContentsMargins(0, 20, 0, 0)
-        
+
         # Version avec statut handlers
-        handler_status = "Conversion Réelle"
-        version_text = f"RetroGameSets 2025 // Version 3.4.2 (Python - {handler_status})"
+        app_version = getattr(QApplication.instance(), 'applicationVersion', lambda: "")( )
+        version_text = f"RetroGameSets 2025 // Version {app_version}"
         version_label = QLabel(version_text)
         version_label.setStyleSheet("color: #6b7280; font-size: 12px;")
         footer_layout.addWidget(version_label)
-        
+
         footer_layout.addStretch()
-        
+
         # Bouton dark mode
         self.dark_mode_button = QPushButton("Eteindre la lumière 🌙")
         self.dark_mode_button.clicked.connect(self.toggle_dark_mode)
         footer_layout.addWidget(self.dark_mode_button)
-        
+
         parent_layout.addLayout(footer_layout)
     
     def darken_color(self, color):
@@ -703,80 +651,21 @@ class B2PCMainWindow(QMainWindow):
         return color_map.get(color, color)
     
     def apply_styles(self):
-        """Applique les styles CSS à l'application"""
-        if self.dark_mode:
-            # Style sombre
-            self.setStyleSheet("""
-                QMainWindow {
-                    background-color: #111827;
-                    color: #FFFFFF;
-                }
-                QWidget {
-                    background-color: #111827;
-                    color: #FFFFFF;
-                }
-                QLineEdit {
-                    background-color: #1f2937;
-                    border: 1px solid #4b5563;
-                    border-radius: 6px;
-                    padding: 8px;
-                    color: #FFFFFF;
-                }
-                QPushButton {
-                    background-color: #4b5563;
-                    color: white;
-                    border: none;
-                    padding: 8px 16px;
-                    border-radius: 6px;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
-                    background-color: #374151;
-                }
-                QLabel {
-                    color: #FFFFFF;
-                }
-            """)
-        else:
-            # Style clair
-            self.setStyleSheet("""
-                QMainWindow {
-                    background-color: #f3f4f6;
-                    color: #1f2937;
-                }
-                QWidget {
-                    background-color: #f3f4f6;
-                    color: #1f2937;
-                }
-                QLineEdit {
-                    background-color: white;
-                    border: 1px solid #d1d5db;
-                    border-radius: 6px;
-                    padding: 8px;
-                    color: #1f2937;
-                }
-                QLineEdit:read-only {
-                    background-color: #f9fafb;
-                }
-                QPushButton {
-                    background-color: #6b7280;
-                    color: white;
-                    border: none;
-                    padding: 8px 16px;
-                    border-radius: 6px;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
-                    background-color: #4b5563;
-                }
-                QPushButton:disabled {
-                    background-color: #d1d5db;
-                    color: #9ca3af;
-                }
-                QLabel {
-                    color: #1f2937;
-                }
-            """)
+        """Recharge et applique le QSS à chaque appel (chemin compatible PyInstaller)."""
+        try:
+            app = QApplication.instance()
+            qss_path = resource_path(f"ressources/themes/{'dark.qss' if self.dark_mode else 'light.qss'}")
+            if os.path.exists(qss_path):
+                with open(qss_path, "r", encoding="utf-8") as f:
+                    style = f.read()
+                from PyQt6.QtWidgets import QApplication as QAppType
+                if app is not None and isinstance(app, QAppType):
+                    app.setStyleSheet("")
+                    app.setStyleSheet(style)
+                self.setStyleSheet("")
+                self.setStyleSheet(style)
+        except Exception as e:
+            print(f"Erreur lors du chargement du fichier QSS : {e}")
     
     def toggle_dark_mode(self):
         """Bascule entre mode sombre et clair"""
@@ -787,10 +676,23 @@ class B2PCMainWindow(QMainWindow):
     def update_button_states(self):
         """Met à jour l'état des boutons selon la sélection des dossiers"""
         folders_selected = bool(self.source_input.text() and self.dest_input.text())
-        
+
         if hasattr(self, 'conversion_buttons'):
             for button in self.conversion_buttons:
                 button.setEnabled(folders_selected)
+                color_class = button.property("colorClass")
+                # Mise à jour du curseur selon l'état
+                if folders_selected:
+                    button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+                    # Appliquer la classe couleur si activé
+                    if color_class:
+                        button.setProperty("class", color_class)
+                        button.setStyleSheet("")  # Laisser le QSS gérer
+                else:
+                    button.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
+                    # Retirer la classe couleur si désactivé
+                    button.setProperty("class", "")
+                    button.setStyleSheet("")  # Laisser le QSS gérer
     
     def resizeEvent(self, event):
         """Événement de redimensionnement - réarrange les boutons et adapte les marges"""
@@ -888,7 +790,7 @@ def main():
     """Point d'entrée principal"""
     app = QApplication(sys.argv)
     app.setApplicationName("B2PC")
-    app.setApplicationVersion("3.4.2-python-perfect")
+    app.setApplicationVersion("3.5.0.0")
     
     # Créer le dossier LOG s'il n'existe pas
     Path("LOG").mkdir(exist_ok=True)
