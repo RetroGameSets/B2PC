@@ -26,11 +26,11 @@ jobs:
 
       - name: Build EXE
         run: |
-          pyinstaller --onefile --windowed --add-data "ressources;ressources" --icon=ressources/icon.ico main.py
+          pyinstaller --onefile --windowed --add-data "ressources;ressources" --icon=ressources/icon.ico --name B2PC main.py
 
       - name: Upload EXE to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/main.exe
+          files: dist/B2PC.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
