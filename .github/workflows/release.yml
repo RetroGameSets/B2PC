@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'  # Lance le workflow sur chaque tag vX.X.X
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
