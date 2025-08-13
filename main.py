@@ -1,5 +1,5 @@
 APP_VERSION = "3.5.0.1"
-UPDATE_URL = "https://raw.githubusercontent.com/retrogamesets/b2pc/main/ressources/last_version.json"  # À adapter selon votre repo
+UPDATE_URL = "https://raw.githubusercontent.com/RetroGameSets/B2PC/refs/heads/main/ressources/last_version.json"  # À adapter selon votre repo
 
 import os
 import sys
