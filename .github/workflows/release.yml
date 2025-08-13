@@ -1,0 +1,33 @@
+name: Build and Release EXE
+
+on:
+  push:
+    tags:
+      - 'v*'  # Lance le workflow sur chaque tag vX.X.X
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller -r requirements.txt
+
+      - name: Build EXE
+        run: |
+          pyinstaller --onefile --windowed --add-data "ressources;ressources" --icon=ressources/icon.ico main.py
+
+      - name: Upload EXE to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/main.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
