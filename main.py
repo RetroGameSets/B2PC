@@ -1,14 +1,9 @@
+APP_VERSION = "3.5.0.0"
+UPDATE_URL = "https://raw.githubusercontent.com/retrogamesets/b2pc/main/last_version.json"  # À adapter selon votre repo
+
 import os
 import sys
-
-# Fonction utilitaire pour compatibilité PyInstaller
-def resource_path(relative_path):
-    """Retourne le chemin absolu vers une ressource, compatible PyInstaller."""
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative_path) # type: ignore
-    return os.path.join(os.path.abspath("."), relative_path)
-
-#!/usr/bin/env python3
+import urllib.request
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
@@ -27,7 +22,33 @@ from handlers.squashfs import SquashFSHandler
 from handlers.xbox_patch import XboxPatchHandler
 from handlers.base import ConversionHandler
 import json
-print("✅ Démarrage")
+
+# Fonction utilitaire pour compatibilité PyInstaller
+def resource_path(relative_path):
+    """Retourne le chemin absolu vers une ressource, compatible PyInstaller."""
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path) # type: ignore
+    return os.path.join(os.path.abspath("."), relative_path)
+
+def check_for_update():
+    try:
+        with urllib.request.urlopen(UPDATE_URL, timeout=5) as response:
+            data = response.read().decode("utf-8")
+            import json
+            info = json.loads(data)
+            latest_version = info.get("version", "")
+            download_url = info.get("url", "")
+            if latest_version and latest_version != APP_VERSION:
+                import ctypes
+                msg = f"Une nouvelle version ({latest_version}) est disponible !\nTélécharger ?"
+                if ctypes.windll.user32.MessageBoxW(0, msg, "Mise à jour disponible", 1) == 1:
+                    import webbrowser
+                    webbrowser.open(download_url)
+    except Exception as e:
+        print(f"[Update] Impossible de vérifier la mise à jour : {e}")
+
+# Appeler le check au démarrage
+check_for_update()
 
 class LogHandler(logging.Handler):
     """Handler personnalisé pour rediriger les logs vers l'interface"""
@@ -790,7 +811,7 @@ def main():
     """Point d'entrée principal"""
     app = QApplication(sys.argv)
     app.setApplicationName("B2PC")
-    app.setApplicationVersion("3.5.0.0")
+    app.setApplicationVersion(APP_VERSION)
     
     # Créer le dossier LOG s'il n'existe pas
     Path("LOG").mkdir(exist_ok=True)

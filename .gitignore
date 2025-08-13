@@ -3,6 +3,7 @@ LOG/
 .vs/
 .venv/
 _pycache__/
+handlers/__pycache__/
 dist/
 build/
-OLD_ELECTRON/*
+OLD_ELECTRON/
