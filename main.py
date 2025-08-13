@@ -1,4 +1,4 @@
-APP_VERSION = "3.5.0.1"
+APP_VERSION = "3.5.0.2"
 UPDATE_URL = "https://raw.githubusercontent.com/RetroGameSets/B2PC/refs/heads/main/ressources/last_version.json"  # À adapter selon votre repo
 
 import os
@@ -44,6 +44,7 @@ def check_for_update():
                 if ctypes.windll.user32.MessageBoxW(0, msg, "Mise à jour disponible", 1) == 1:
                     import webbrowser
                     webbrowser.open(download_url)
+                    sys.exit(0)  # Ferme l'application immédiatement
     except Exception as e:
         print(f"[Update] Impossible de vérifier la mise à jour : {e}")
 
