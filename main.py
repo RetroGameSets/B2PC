@@ -20,6 +20,8 @@ from handlers.chdv5 import ChdV5Handler
 from handlers.rvz import RvzHandler
 from handlers.squashfs import SquashFSHandler
 from handlers.xbox_patch import XboxPatchHandler
+from handlers.extract_chd import ExtractChdHandler
+from handlers.merge_bin_cue import MergeBinCueHandler
 from handlers.base import ConversionHandler
 import json
 
@@ -158,6 +160,10 @@ class WorkerThread(QThread):
         try:
             if "CHD v5" in self.operation:
                 self.handler = ChdV5Handler(str(tools_path), log_callback, progress_callback)
+            elif "Extract CHD" in self.operation:
+                self.handler = ExtractChdHandler(str(tools_path), log_callback, progress_callback)
+            elif "Merge BIN/CUE" in self.operation:
+                self.handler = MergeBinCueHandler(str(tools_path), log_callback, progress_callback)
             elif "RVZ" in self.operation:
                 self.handler = RvzHandler(str(tools_path), log_callback, progress_callback)
             elif "wSquashFS" in self.operation:
@@ -791,10 +797,10 @@ class B2PCMainWindow(QMainWindow):
         self.show_conversion_dialog("Conversion CHD v5")
     
     def extract_chd(self):
-        self.show_conversion_dialog("Extraction CHD")
+        self.show_conversion_dialog("Extract CHD")
     
     def merge_bin_cue(self):
-        self.show_conversion_dialog("Fusion BIN/CUE")
+        self.show_conversion_dialog("Merge BIN/CUE")
     
     def convert_iso_rvz(self):
         self.show_conversion_dialog("Conversion ISO vers RVZ")
