@@ -2,7 +2,7 @@ LOG/
 .vscode/
 .vs/
 .venv/
-_pycache__/
+__pycache__/
 handlers/__pycache__/
 dist/
 build/
