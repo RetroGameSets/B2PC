@@ -1,5 +1,7 @@
 # B2PC - Prototype Python
 
+## SUPPORT / HELP : https://discord.gg/Vph9jwg3VV 
+
 ## Vue d'ensemble
 Prototype Python pour l'application B2PC (Backup to PC) avec interface PyQt6 et handlers de conversion complets.
 
