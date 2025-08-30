@@ -1,4 +1,4 @@
-APP_VERSION = "3.5.0.3"
+APP_VERSION = "3.6.0.1"
 UPDATE_URL = "https://raw.githubusercontent.com/RetroGameSets/B2PC/refs/heads/main/ressources/last_version.json"  # À adapter selon votre repo
 
 import os
@@ -8,7 +8,7 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QGridLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QProgressBar,
-    QFileDialog, QDialog
+    QFileDialog, QDialog, QComboBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QCursor
@@ -158,7 +158,7 @@ class WorkerThread(QThread):
             self.progress_update.emit(progress, msg)
         
         try:
-            if "CHD v5" in self.operation:
+            if self.operation == "Conversion CHD v5":
                 self.handler = ChdV5Handler(str(tools_path), log_callback, progress_callback)
             elif "Extract CHD" in self.operation:
                 self.handler = ExtractChdHandler(str(tools_path), log_callback, progress_callback)
@@ -172,34 +172,32 @@ class WorkerThread(QThread):
                 self.handler = XboxPatchHandler(str(tools_path), log_callback, progress_callback)
             else:
                 raise ValueError(f"Handler non disponible pour: {self.operation}")
-            
+
             # Configurer le handler
             self.handler.source_folder = self.source_folder
             self.handler.dest_folder = self.dest_folder
-            
+
             # Valider les outils
             if not self.handler.validate_tools():
                 raise Exception("Outils requis manquants")
-            
+
             # Exécuter la conversion
             self.progress_update.emit(20, "Conversion en cours")
-            
+
             # Pour SquashFSHandler, on peut appeler compress/extract selon l'opération
             if isinstance(self.handler, SquashFSHandler):
                 if "Compression" in self.operation:
                     results = self.handler.compress()
-                elif "Extraction" in self.operation or "Extract" in self.operation or "Décompression" in self.operation:
+                elif any(k in self.operation for k in ("Extraction", "Extract", "Décompression")):
                     results = self.handler.extract()
                 else:
                     results = self.handler.convert()
             else:
-                # Pour tous les autres handlers, toujours .convert()
                 results = self.handler.convert()
-            
+
             return results
-            
         except Exception as e:
-            self.log_both(f"❌ Erreur handler réel: {str(e)}")
+            self.log_both(f"❌ Erreur handler réel: {e}")
             raise
 
 class LogDialog(QDialog):
@@ -275,6 +273,13 @@ class LogDialog(QDialog):
     def add_log(self, message):
         """Ajoute un message au log avec coloration"""
         timestamp = datetime.now().strftime("%H:%M:%S")
+
+        # Traduction dynamique si interface en anglais
+        parent = self.parent()
+        # Vérification stricte du type pour éviter l'avertissement de l'analyseur statique
+        if parent and isinstance(parent, B2PCMainWindow) and parent.language == 'en':
+            # Appel direct garanti par isinstance
+            message = parent.translate_log_message(message)  # type: ignore[attr-defined]
         
         # Déterminer la couleur selon le type de message
         if "❌" in message or "Erreur" in message or "Échec" in message:
@@ -315,23 +320,33 @@ class LogDialog(QDialog):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename, _ = QFileDialog.getSaveFileName(
             self,
-            "Sauvegarder les logs affichés",
+            ("Sauvegarder les logs affichés" if getattr(self.parent(), 'language', 'fr') == 'fr' else "Save displayed logs"),
             f"B2PC_logs_interface_{timestamp}.txt",
-            "Fichiers texte (*.txt)"
+            ("Fichiers texte (*.txt)" if getattr(self.parent(), 'language', 'fr') == 'fr' else "Text files (*.txt)")
         )
         
         if filename:
             try:
                 with open(filename, 'w', encoding='utf-8') as f:
-                    f.write("B2PC - Logs de conversion (Interface)\n")
-                    f.write(f"Généré le: {datetime.now()}\n")
+                    if getattr(self.parent(), 'language', 'fr') == 'fr':
+                        f.write("B2PC - Logs de conversion (Interface)\n")
+                        f.write(f"Généré le: {datetime.now()}\n")
+                    else:
+                        f.write("B2PC - Conversion logs (Interface)\n")
+                        f.write(f"Generated on: {datetime.now()}\n")
                     f.write("=" * 50 + "\n\n")
                     f.write(self.log_text.toPlainText())
                 
                 # Afficher confirmation
-                self.add_log(f"💾 Logs sauvegardés: {Path(filename).name}")
+                if getattr(self.parent(), 'language', 'fr') == 'fr':
+                    self.add_log(f"💾 Logs sauvegardés: {Path(filename).name}")
+                else:
+                    self.add_log(f"💾 Logs saved: {Path(filename).name}")
             except Exception as e:
-                self.add_log(f"❌ Erreur sauvegarde: {str(e)}")
+                if getattr(self.parent(), 'language', 'fr') == 'fr':
+                    self.add_log(f"❌ Erreur sauvegarde: {str(e)}")
+                else:
+                    self.add_log(f"❌ Save error: {str(e)}")
 
 class B2PCMainWindow(QMainWindow):
     """Fenêtre principale de l'application B2PC"""
@@ -343,12 +358,131 @@ class B2PCMainWindow(QMainWindow):
         self.dark_mode = False
         self.current_worker = None
         self.log_dialog = None
+        # Charger paramétrage (langue) avant construction UI
+        self.language = 'fr'
+        self._settings = {}
+        self._translation_store = []  # Liste de tuples (widget, base_text_key, dynamic_callable?)
 
+        # Dictionnaire de traductions (clé = texte FR original)
+        self.translations_en = {
+            'Dossier source (Archives autorisées):': 'Source folder (archives allowed):',
+            'Sélectionnez un dossier source...': 'Select a source folder...',
+            'Parcourir': 'Browse',
+            'Dossier destination:': 'Destination folder:',
+            'Sélectionnez un dossier destination...': 'Select a destination folder...',
+            'Conversion': 'Conversion',
+            'CHD v5': 'CHD v5',
+            'CHD v5 DVD': 'CHD v5 DVD',
+            'Extract CHD > BIN/CUE': 'Extract CHD > BIN/CUE',
+            'Merge BIN/CUE': 'Merge BIN/CUE',
+            'GC/WII ISO to RVZ': 'GC/WII ISO to RVZ',
+            'WII ISO to WBFS': 'WII ISO to WBFS',
+            'Compression / Décompression': 'Compression / Decompression',
+            'Compression wSquashFS': 'wSquashFS Compression',
+            'Décompression wSquashFS': 'wSquashFS Extraction',
+            'Outils': 'Tools',
+            'Patch Xbox ISO': 'Patch Xbox ISO',
+            'Eteindre la lumière 🌙': 'Enable dark mode 🌙',
+            'Allumer la lumière ☀️': 'Disable dark mode ☀️',
+            '🛑 Arrêter': '🛑 Stop',
+            '🛑 Arrêt en cours...': '🛑 Stopping...',
+            'Fermer': 'Close',
+            '💾 Sauvegarder logs': '💾 Save logs',
+            'Ouvrir dossier LOG': 'Open LOG folder',
+            'Logs de conversion': 'Conversion logs',
+            'Conversion CHD v5': 'CHD v5 Conversion',
+            'Conversion CHD v5 DVD': 'CHD v5 DVD Conversion',
+            'Extract CHD': 'Extract CHD',
+            'Merge BIN/CUE': 'Merge BIN/CUE',
+            'Conversion ISO vers RVZ': 'ISO to RVZ Conversion',
+            'Décompression wSquashFS': 'wSquashFS Extraction',
+            'Patch Xbox ISO': 'Patch Xbox ISO'
+        }
+
+        # Fragments de traduction pour les messages de log (FR -> EN)
+        self.log_translations_en = {
+            "Début de l'opération": "Start of operation",
+            "Dossier source": "Source folder",
+            "Dossier destination": "Destination folder",
+            "Mode conversion réelle activé": "Real conversion mode enabled",
+            "Opération terminée avec succès": "Operation completed successfully",
+            "Log sauvegardé": "Log saved",
+            "Erreur critique": "Critical error",
+            "Demande d'arrêt envoyée": "Stop request sent",
+            "Conversion arrêtée par l'utilisateur": "Conversion stopped by user",
+            "Conversion terminée": "Conversion finished",
+            "Fichier de log créé": "Log file created",
+            "Outil manquant": "Missing tool",
+            "Tous les outils sont présents": "All required tools are present",
+            "Arrêt de la conversion demandé": "Conversion stop requested",
+            "Processus terminé": "Process terminated",
+            "Processus forcé à s'arrêter": "Process force-stopped",
+            "Impossible d'arrêter le processus": "Unable to stop process",
+            "Exception lors de l'exécution": "Exception while running",
+            "Conversion arrêtée": "Conversion stopped",
+            "Archive extraite": "Archive extracted",
+            "Échec extraction": "Extraction failed",
+            "Extraction archive": "Extracting archive",
+            "Fichier déjà converti": "File already converted",
+            "Déjà converti": "Already converted",
+            "Échec conversion": "Conversion failed",
+            "Extension ignorée": "Ignored extension",
+            "Sources détectées": "Detected sources",
+            "Fichier": "File",
+            "Trouvé": "Found",
+            "fichiers exploitables dans l'archive": "processable files in archive",
+            "Logs sauvegardés": "Logs saved",
+            "Erreur sauvegarde": "Save error",
+            "Dossier temporaire créé": "Temporary folder created",
+            "Dossier temporaire nettoyé": "Temporary folder cleaned",
+            "Erreur nettoyage dossier temporaire": "Temp folder cleanup error"
+        }
+
+        # Charger les paramètres persistants puis configuration UI
+        self._settings = self.load_settings()
+        if isinstance(self._settings, dict):
+            self.language = self._settings.get('language', 'fr')
         # Charger la configuration UI
         self.ui_config = self.load_ui_config()
 
         self.init_ui()
         self.apply_styles()
+        # Appliquer la langue chargée
+        if self.language == 'en':
+            # Mettre à jour combo si déjà créé dans footer
+            if hasattr(self, 'language_combo'):
+                idx = self.language_combo.findData('en')
+                if idx >= 0:
+                    self.language_combo.setCurrentIndex(idx)
+            self.retranslate_ui()
+
+    # ---------------- Paramètres / Configuration ----------------
+    def get_config_dir(self):
+        base = os.getenv('APPDATA') or str(Path.home())
+        cfg_dir = Path(base) / 'B2PC'
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        return cfg_dir
+
+    def load_settings(self):
+        try:
+            cfg_file = self.get_config_dir() / 'settings.json'
+            if cfg_file.exists():
+                with open(cfg_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception:
+            pass
+        return {}
+
+    def save_settings(self):
+        try:
+            cfg_file = self.get_config_dir() / 'settings.json'
+            data = {
+                'language': self.language
+            }
+            with open(cfg_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
     
     def load_ui_config(self):
         """Charge la configuration UI depuis ui.json (chemin compatible PyInstaller)"""
@@ -424,57 +558,54 @@ class B2PCMainWindow(QMainWindow):
         folder_container = QWidget()
         folder_layout = QVBoxLayout(folder_container)
         folder_layout.setSpacing(15)
-        
-        # Container pour les deux sections de dossiers
+
         folders_row = QHBoxLayout()
         folders_row.setSpacing(20)
-        
-        # Dossier source
+
+        # Source
         source_container = QWidget()
         source_layout = QVBoxLayout(source_container)
         source_layout.setContentsMargins(0, 0, 0, 0)
-        
         source_label = QLabel("Dossier source (Archives autorisées):")
         source_label.setObjectName("sourceLabel")
         source_layout.addWidget(source_label)
-        
+        self._translation_store.append((source_label, 'Dossier source (Archives autorisées):'))
         source_row = QHBoxLayout()
         self.source_input = QLineEdit()
         self.source_input.setReadOnly(True)
         self.source_input.setPlaceholderText("Sélectionnez un dossier source...")
+        self._translation_store.append((self.source_input, 'Sélectionnez un dossier source...'))
         self.source_input.textChanged.connect(self.update_button_states)
         source_row.addWidget(self.source_input)
-        
         self.source_button = QPushButton("Parcourir")
         self.source_button.clicked.connect(self.select_source_folder)
         source_row.addWidget(self.source_button)
-        
+        self._translation_store.append((self.source_button, 'Parcourir'))
         source_layout.addLayout(source_row)
         folders_row.addWidget(source_container)
-        
-        # Dossier destination
+
+        # Destination
         dest_container = QWidget()
         dest_layout = QVBoxLayout(dest_container)
         dest_layout.setContentsMargins(0, 0, 0, 0)
-        
         dest_label = QLabel("Dossier destination:")
         dest_label.setObjectName("destLabel")
         dest_layout.addWidget(dest_label)
-        
+        self._translation_store.append((dest_label, 'Dossier destination:'))
         dest_row = QHBoxLayout()
         self.dest_input = QLineEdit()
         self.dest_input.setReadOnly(True)
         self.dest_input.setPlaceholderText("Sélectionnez un dossier destination...")
+        self._translation_store.append((self.dest_input, 'Sélectionnez un dossier destination...'))
         self.dest_input.textChanged.connect(self.update_button_states)
         dest_row.addWidget(self.dest_input)
-        
         self.dest_button = QPushButton("Parcourir")
         self.dest_button.clicked.connect(self.select_dest_folder)
         dest_row.addWidget(self.dest_button)
-        
+        self._translation_store.append((self.dest_button, 'Parcourir'))
         dest_layout.addLayout(dest_row)
         folders_row.addWidget(dest_container)
-        
+
         folder_layout.addLayout(folders_row)
         parent_layout.addWidget(folder_container)
     
@@ -505,7 +636,7 @@ class B2PCMainWindow(QMainWindow):
                 ("Merge BIN/CUE", self.merge_bin_cue, "#22c55e"),
                 ("GC/WII ISO to RVZ", self.convert_iso_rvz, "#22c55e"),
                 ("WII ISO to WBFS", None, "#22c55e", True),  # Désactivé
-                ("PS1 to PSP EBOOT", None, "#22c55e", True)   # Désactivé
+                # Bouton PS1 to PSP EBOOT retiré
             ]
         )
         self.button_groups.append(conv_group)
@@ -605,6 +736,7 @@ class B2PCMainWindow(QMainWindow):
         title_label = QLabel(title)
         title_label.setObjectName("buttonGroupTitle")
         group_layout.addWidget(title_label)
+        self._translation_store.append((title_label, title))
 
         # Boutons
         self.conversion_buttons = getattr(self, 'conversion_buttons', [])
@@ -617,7 +749,7 @@ class B2PCMainWindow(QMainWindow):
 
             button = QPushButton(text)
             button.setObjectName("conversionButton")
-            # Déterminer la classe couleur
+            self._translation_store.append((button, text))
             color_class = None
             if color == self.ui_config["colors"]["green"]:
                 color_class = "green"
@@ -628,13 +760,11 @@ class B2PCMainWindow(QMainWindow):
             if color_class:
                 button.setProperty("colorClass", color_class)
                 button.setProperty("class", color_class)
-                # On n'ajoute la classe que si le bouton est activé
             button.setMinimumHeight(40)
 
             if disabled:
                 button.setEnabled(False)
                 button.setProperty("disabled", True)
-                # On retire la classe couleur si désactivé
                 button.setStyleSheet("")
             else:
                 button.setProperty("disabled", False)
@@ -665,6 +795,16 @@ class B2PCMainWindow(QMainWindow):
         self.dark_mode_button = QPushButton("Eteindre la lumière 🌙")
         self.dark_mode_button.clicked.connect(self.toggle_dark_mode)
         footer_layout.addWidget(self.dark_mode_button)
+        self._translation_store.append((self.dark_mode_button, 'Eteindre la lumière 🌙'))
+
+        # Switch langue (Combo compact)
+        self.language_combo = QComboBox()
+        self.language_combo.addItem('FR', 'fr')
+        self.language_combo.addItem('EN', 'en')
+        self.language_combo.setCurrentIndex(0)
+        self.language_combo.setFixedWidth(60)
+        self.language_combo.currentIndexChanged.connect(self.on_language_changed)
+        footer_layout.addWidget(self.language_combo)
 
         parent_layout.addLayout(footer_layout)
     
@@ -698,8 +838,77 @@ class B2PCMainWindow(QMainWindow):
     def toggle_dark_mode(self):
         """Bascule entre mode sombre et clair"""
         self.dark_mode = not self.dark_mode
-        self.dark_mode_button.setText("Allumer la lumière ☀️" if self.dark_mode else "Eteindre la lumière 🌙")
+        # Mettre à jour le texte suivant la langue
+        if self.dark_mode:
+            fr_text = "Allumer la lumière ☀️"
+        else:
+            fr_text = "Eteindre la lumière 🌙"
+        if self.language == 'en':
+            self.dark_mode_button.setText(self.translations_en.get(fr_text, fr_text))
+        else:
+            self.dark_mode_button.setText(fr_text)
         self.apply_styles()
+
+    def on_language_changed(self):
+        data = self.language_combo.currentData()
+        if data in ('fr','en'):
+            self.language = data
+            self.retranslate_ui()
+            self.save_settings()
+
+    def retranslate_ui(self):
+        """Applique les traductions aux widgets enregistrés."""
+        for widget, base_text in self._translation_store:
+            if isinstance(widget, QLineEdit):
+                # Placeholder seulement
+                if self.language == 'en':
+                    widget.setPlaceholderText(self.translations_en.get(base_text, base_text))
+                else:
+                    widget.setPlaceholderText(base_text)
+            else:
+                if self.language == 'en':
+                    widget.setText(self.translations_en.get(base_text, base_text))
+                else:
+                    widget.setText(base_text)
+        # Retraduire la fenêtre de logs si ouverte
+        if self.log_dialog:
+            if self.language == 'en':
+                self.log_dialog.setWindowTitle(self.translations_en.get('Logs de conversion', 'Conversion logs'))
+                # Boutons spécifiques
+                mapping = {
+                    '🛑 Arrêter': '🛑 Stop',
+                    '💾 Sauvegarder logs': '💾 Save logs',
+                    'Ouvrir dossier LOG': 'Open LOG folder',
+                    'Fermer': 'Close'
+                }
+                for child in self.log_dialog.findChildren(QPushButton):
+                    base = None
+                    # Trouver la clé FR correspondante
+                    for fr, en in mapping.items():
+                        if child.text() in (fr, en):
+                            base = fr
+                            break
+                    if base:
+                        child.setText(mapping[base])
+            else:
+                self.log_dialog.setWindowTitle('Logs de conversion')
+                mapping = {
+                    '🛑 Stop': '🛑 Arrêter',
+                    '💾 Save logs': '💾 Sauvegarder logs',
+                    'Open LOG folder': 'Ouvrir dossier LOG',
+                    'Close': 'Fermer'
+                }
+                for child in self.log_dialog.findChildren(QPushButton):
+                    if child.text() in mapping:
+                        child.setText(mapping[child.text()])
+
+    def translate_log_message(self, message: str) -> str:
+        """Remplace les fragments FR par EN en conservant emojis et chiffres."""
+        translated = message
+        for fr, en in self.log_translations_en.items():
+            if fr in translated:
+                translated = translated.replace(fr, en)
+        return translated
     
     def update_button_states(self):
         """Met à jour l'état des boutons selon la sélection des dossiers"""
@@ -770,7 +979,14 @@ class B2PCMainWindow(QMainWindow):
         
         self.log_dialog.log_text.clear()
         self.log_dialog.hide_progress()
-        self.log_dialog.setWindowTitle(f"Conversion - {operation_name}")
+        # Traduction du titre d'opération
+        op_title = operation_name
+        if self.language == 'en':
+            op_title = self.translations_en.get(operation_name, operation_name)
+            prefix = 'Conversion - '
+        else:
+            prefix = 'Conversion - '
+        self.log_dialog.setWindowTitle(f"{prefix}{op_title}")
         
         # Démarrer le worker thread
         self.current_worker = WorkerThread(operation_name, self.source_folder, self.dest_folder)
@@ -795,7 +1011,6 @@ class B2PCMainWindow(QMainWindow):
     # Méthodes de conversion (callbacks des boutons)
     def convert_chd_v5(self):
         self.show_conversion_dialog("Conversion CHD v5")
-    
     def extract_chd(self):
         self.show_conversion_dialog("Extract CHD")
     

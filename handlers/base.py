@@ -73,12 +73,12 @@ class ConversionHandler:
         src_tool_path = resource_path(f"ressources/{tool_name}")
         temp_dir = tempfile.gettempdir()
         temp_tool_path = os.path.join(temp_dir, tool_name)
-        if not os.path.exists(temp_tool_path):
-            try:
-                shutil.copy2(src_tool_path, temp_tool_path)
-            except Exception as e:
-                self.log(f"❌ Impossible d'extraire {tool_name} : {e}")
-                return False
+        # Toujours recopier (remplacer) afin de prendre en compte une nouvelle version déposée dans ressources
+        try:
+            shutil.copy2(src_tool_path, temp_tool_path)
+        except Exception as e:
+            self.log(f"❌ Impossible de préparer {tool_name} dans le dossier temporaire : {e}")
+            return False
         cmd = [temp_tool_path] + args
         self.log(f"🔧 Exécution : {' '.join(cmd)}")
         flags = 0
