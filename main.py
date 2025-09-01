@@ -1,4 +1,4 @@
-APP_VERSION = "3.6.0.2"
+APP_VERSION = "3.6.0.3"
 UPDATE_URL = "https://raw.githubusercontent.com/RetroGameSets/B2PC/refs/heads/main/ressources/last_version.json"  # À adapter selon votre repo
 
 import os
@@ -24,6 +24,7 @@ from handlers.extract_chd import ExtractChdHandler
 from handlers.merge_bin_cue import MergeBinCueHandler
 from handlers.base import ConversionHandler
 import json
+import re
 
 # Fonction utilitaire pour compatibilité PyInstaller
 def resource_path(relative_path):
@@ -396,7 +397,12 @@ class B2PCMainWindow(QMainWindow):
             'Merge BIN/CUE': 'Merge BIN/CUE',
             'Conversion ISO vers RVZ': 'ISO to RVZ Conversion',
             'Décompression wSquashFS': 'wSquashFS Extraction',
-            'Patch Xbox ISO': 'Patch Xbox ISO'
+            'Patch Xbox ISO': 'Patch Xbox ISO',
+            'Infos CHD': 'CHD Info',
+            'Analyse CHD': 'CHD Analysis',
+            'Taille originale': 'Original size',
+            'Taille compressée': 'Compressed size',
+            'Ratio': 'Ratio'
         }
 
         # Fragments de traduction pour les messages de log (FR -> EN)
@@ -655,7 +661,8 @@ class B2PCMainWindow(QMainWindow):
         tools_group = self.create_button_group(
             "Outils",
             [
-                ("Patch Xbox ISO", self.patch_xbox_iso, "#a855f7")
+                ("Patch Xbox ISO", self.patch_xbox_iso, "#a855f7"),
+                ("Infos CHD", self.show_chd_info, "#a855f7")
             ]
         )
         self.button_groups.append(tools_group)
@@ -773,6 +780,9 @@ class B2PCMainWindow(QMainWindow):
                 if callback:
                     button.clicked.connect(callback)
                 self.conversion_buttons.append(button)
+                # Conserver une référence spécifique pour logique d'activation différente
+                if text == "Infos CHD":
+                    self.chd_info_button = button
             group_layout.addWidget(button)
         group_layout.addStretch()
         return group_widget
@@ -912,24 +922,27 @@ class B2PCMainWindow(QMainWindow):
     
     def update_button_states(self):
         """Met à jour l'état des boutons selon la sélection des dossiers"""
-        folders_selected = bool(self.source_input.text() and self.dest_input.text())
+        source_selected = bool(self.source_input.text())
+        dest_selected = bool(self.dest_input.text())
 
         if hasattr(self, 'conversion_buttons'):
             for button in self.conversion_buttons:
-                button.setEnabled(folders_selected)
+                # Cas spécial: bouton Infos CHD actif avec seulement source
+                if hasattr(self, 'chd_info_button') and button is self.chd_info_button:
+                    enable = source_selected
+                else:
+                    enable = source_selected and dest_selected
+                button.setEnabled(enable)
                 color_class = button.property("colorClass")
-                # Mise à jour du curseur selon l'état
-                if folders_selected:
+                if enable:
                     button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-                    # Appliquer la classe couleur si activé
                     if color_class:
                         button.setProperty("class", color_class)
-                        button.setStyleSheet("")  # Laisser le QSS gérer
+                        button.setStyleSheet("")
                 else:
                     button.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
-                    # Retirer la classe couleur si désactivé
                     button.setProperty("class", "")
-                    button.setStyleSheet("")  # Laisser le QSS gérer
+                    button.setStyleSheet("")
     
     def resizeEvent(self, event):
         """Événement de redimensionnement - réarrange les boutons et adapte les marges"""
@@ -1028,6 +1041,118 @@ class B2PCMainWindow(QMainWindow):
     
     def patch_xbox_iso(self):
         self.show_conversion_dialog("Patch Xbox ISO")
+
+    # ------------------ CHD INFO FEATURE ------------------
+    def show_chd_info(self):
+        """Analyse les fichiers .chd du dossier source et affiche un tableau d'infos."""
+        if not self.source_input.text():
+            return
+        folder = Path(self.source_input.text())
+        if not folder.exists():
+            return
+        chd_files = list(folder.glob('*.chd'))
+        if not chd_files:
+            # réutiliser la log dialog pour message rapide
+            self.show_conversion_dialog("Conversion CHD v5")  # ouvre une dialog existante
+            if self.log_dialog:
+                msg = "Aucun fichier CHD trouvé" if self.language=='fr' else "No CHD file found"
+                self.log_dialog.add_log(msg)
+            return
+
+        dialog = CHDInfoDialog(self)
+        dialog.populate(chd_files, tools_path=Path('ressources'))
+        dialog.exec()
+
+
+class CHDInfoDialog(QDialog):
+    """Dialog pour afficher les infos des CHD."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Infos CHD" if getattr(parent,'language','fr')=='fr' else 'CHD Info')
+        self.resize(900, 400)
+        layout = QVBoxLayout(self)
+        from PyQt6.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView
+        self.table = QTableWidget(0, 6)
+        headers_fr = ["Fichier","Version","Type","Taille originale","Taille compressée","Ratio"]
+        headers_en = ["File","Version","Type","Original size","Compressed size","Ratio"]
+        lang = getattr(parent,'language','fr')
+        self.table.setHorizontalHeaderLabels(headers_fr if lang=='fr' else headers_en)
+        header = self.table.horizontalHeader()
+        if header:
+            header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+            # Largeurs par défaut (ajustables ensuite par l'utilisateur)
+            default_widths = [250, 70, 60, 130, 140, 70]
+            for i, w in enumerate(default_widths):
+                if i < self.table.columnCount():
+                    self.table.setColumnWidth(i, w)
+            header.setStretchLastSection(False)
+        layout.addWidget(self.table)
+        btn_close = QPushButton("Fermer" if lang=='fr' else 'Close')
+        btn_close.clicked.connect(self.accept)
+        layout.addWidget(btn_close)
+
+    def human(self, n):
+        try:
+            n = int(n)
+            for unit in ['B','KB','MB','GB','TB']:
+                if n < 1024:
+                    return f"{n:.0f} {unit}" if unit=='B' else f"{n:.2f} {unit}"
+                n /= 1024
+            return f"{n:.2f} PB"
+        except Exception:
+            return str(n)
+
+    def parse_info(self, text: str):
+        version = None
+        logical = None
+        chd_size = None
+        ratio = None
+        chd_type = None
+        # Regex lignes
+        for line in text.splitlines():
+            line=line.strip()
+            if line.startswith('File Version:'):
+                version = line.split(':',1)[1].strip()
+            elif line.startswith('Logical size:'):
+                logical = re.sub(r'[^0-9]','', line.split(':',1)[1])
+            elif line.startswith('CHD size:'):
+                chd_size = re.sub(r'[^0-9]','', line.split(':',1)[1])
+            elif line.startswith('Ratio:'):
+                ratio = line.split(':',1)[1].strip()
+            elif line.startswith('Metadata:') and "Tag='DVD" in line:
+                chd_type = 'DVD'
+            elif line.startswith('Metadata:') and "TRACK:1" in line:
+                chd_type = 'CD'
+        if not chd_type:
+            # heuristique: si logical size > 1.5GB => DVD
+            try:
+                if logical and int(logical) > 1500*1024*1024:
+                    chd_type='DVD'
+                else:
+                    chd_type='CD'
+            except Exception:
+                chd_type='?'
+        return version or '?', chd_type, logical, chd_size, ratio or '?'
+
+    def populate(self, files, tools_path: Path):
+        from PyQt6.QtWidgets import QTableWidgetItem
+        chdman = tools_path / 'chdman.exe'
+        for f in files:
+            try:
+                # Exécuter chdman info
+                proc = subprocess.run([str(chdman), 'info', '--input', str(f)], capture_output=True, text=True, timeout=30)
+                output = proc.stdout + '\n' + proc.stderr
+                version, chd_type, logical, chd_size, ratio = self.parse_info(output)
+            except Exception as e:
+                version, chd_type, logical, chd_size, ratio = ('?','?',None,None,'?')
+            row = self.table.rowCount()
+            self.table.insertRow(row)
+            self.table.setItem(row,0,QTableWidgetItem(f.name))
+            self.table.setItem(row,1,QTableWidgetItem(version))
+            self.table.setItem(row,2,QTableWidgetItem(chd_type))
+            self.table.setItem(row,3,QTableWidgetItem(self.human(logical) if logical else '?'))
+            self.table.setItem(row,4,QTableWidgetItem(self.human(chd_size) if chd_size else '?'))
+            self.table.setItem(row,5,QTableWidgetItem(ratio))
 
 def main():
     """Point d'entrée principal"""
