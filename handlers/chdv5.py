@@ -2,7 +2,7 @@ from .base import ConversionHandler
 from pathlib import Path
 
 class ChdV5Handler(ConversionHandler):
-    """Handler unifié CHD v5 :
+    """Handler unifié ISO/CUE > CHD :
     - .cue  => createcd
     - .iso  => createdvd
     Détection automatique selon l'extension, un seul bouton dans l'UI."""
@@ -33,7 +33,11 @@ class ChdV5Handler(ConversionHandler):
                     self.log(f"📦 Extraction archive: {source_item.name}")
                     try:
                         extracted_folder = self.extract_single_archive(source_item)
-                        input_files = list(extracted_folder.rglob("*.iso")) + list(extracted_folder.rglob("*.cue"))
+                        # Non récursif: uniquement fichiers directement extraits au premier niveau
+                        input_files = []
+                        for item in extracted_folder.iterdir():
+                            if item.is_file() and item.suffix.lower() in (".iso", ".cue"):
+                                input_files.append(item)
                         self.log(f"🗂️ Trouvé {len(input_files)} fichiers exploitables dans l'archive")
                     except Exception as e:
                         self.log(f"❌ Échec extraction {source_item.name}: {e}")

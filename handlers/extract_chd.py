@@ -22,7 +22,7 @@ class ExtractChdHandler(ConversionHandler):
                 self.log(f"📦 Extraction de l'archive: {source_item.name}")
                 try:
                     extracted_folder = self.extract_single_archive(source_item)
-                    chd_files = list(extracted_folder.rglob("*.chd"))
+                    chd_files = [p for p in extracted_folder.iterdir() if p.is_file() and p.suffix.lower()==".chd"]
                     self.log(f"📁 Trouvé {len(chd_files)} CHD dans l'archive")
                 except Exception as e:
                     self.log(f"❌ Échec extraction {source_item.name}: {str(e)}")

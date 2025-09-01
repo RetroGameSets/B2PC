@@ -64,21 +64,30 @@ class ConversionHandler:
         """Extraction (optionnelle) - utile pour SquashFSHandler"""
         raise NotImplementedError("extract() non implémenté pour ce handler")
     def run_tool(self, tool_name: str, args: List[str], cwd: Optional[str] = None, show_output: bool = True) -> bool:
-        """Exécute un outil externe avec gestion d'erreurs, extraction temporaire et sans fenêtre CMD."""
+        """Exécute un outil externe avec gestion d'erreurs.
+
+        Pour certains outils (gensquashfs/unsquashfs) on exécute directement dans le dossier
+        ressources pour conserver les DLL adjacentes.
+        """
         import sys, shutil, tempfile
         if self.check_should_stop():
             return False
-        # Extraction de l'outil dans un dossier temporaire si nécessaire
         from main import resource_path
         src_tool_path = resource_path(f"ressources/{tool_name}")
-        temp_dir = tempfile.gettempdir()
-        temp_tool_path = os.path.join(temp_dir, tool_name)
-        # Toujours recopier (remplacer) afin de prendre en compte une nouvelle version déposée dans ressources
-        try:
-            shutil.copy2(src_tool_path, temp_tool_path)
-        except Exception as e:
-            self.log(f"❌ Impossible de préparer {tool_name} dans le dossier temporaire : {e}")
+        if not os.path.exists(src_tool_path):
+            self.log(f"❌ Outil introuvable: {tool_name}")
             return False
+        special_tools = {"gensquashfs.exe", "unsquashfs.exe"}
+        if tool_name in special_tools:
+            temp_tool_path = src_tool_path
+        else:
+            temp_dir = tempfile.gettempdir()
+            temp_tool_path = os.path.join(temp_dir, tool_name)
+            try:
+                shutil.copy2(src_tool_path, temp_tool_path)
+            except Exception as e:
+                self.log(f"❌ Impossible de préparer {tool_name}: {e}")
+                return False
         cmd = [temp_tool_path] + args
         self.log(f"🔧 Exécution : {' '.join(cmd)}")
         flags = 0
@@ -193,12 +202,11 @@ class ConversionHandler:
                     return True
         return False
     def detect_archives(self, folder_path: Path) -> List[Path]:
+        """Détecte seulement les archives situées au NIVEAU RACINE du dossier source (non récursif)."""
         archive_extensions = [".zip", ".rar", ".7z"]
-        archives = []
-        for ext in archive_extensions:
-            archives.extend(list(folder_path.rglob(f"*{ext}")))
+        archives = [p for p in folder_path.iterdir() if p.is_file() and p.suffix.lower() in archive_extensions]
         if archives:
-            self.log(f"📦 Détecté {len(archives)} archive(s) à extraire")
+            self.log(f"📦 Détecté {len(archives)} archive(s) (niveau racine)")
             for archive in archives:
                 self.log(f"   📁 {archive.name}")
         return archives
@@ -220,9 +228,10 @@ class ConversionHandler:
     def get_all_source_files(self, file_extension: str) -> List[tuple]:
         source_path = Path(self.source_folder)
         files_list = []
-        direct_files = list(source_path.rglob(f"*{file_extension}"))
-        for file_path in direct_files:
-            files_list.append((file_path, None))
+        # Fichiers uniquement au niveau racine
+        for file_path in source_path.iterdir():
+            if file_path.is_file() and file_path.suffix.lower() == file_extension.lower():
+                files_list.append((file_path, None))
         archives = self.detect_archives(source_path)
         for archive in archives:
             files_list.append((archive, "archive"))
@@ -247,12 +256,13 @@ class ConversionHandler:
         self.temp_extract_folder = Path(tempfile.mkdtemp(prefix="B2PC_extract_"))
         self.log(f"📂 Dossier temporaire créé: {self.temp_extract_folder}")
         self.log("📋 Copie des fichiers non-archive...")
-        for item in source_path.rglob("*"):
+        for item in source_path.iterdir():
             if item.is_file() and item.suffix.lower() not in [".zip", ".rar", ".7z"]:
-                relative_path = item.relative_to(source_path)
-                dest_file = self.temp_extract_folder / relative_path
-                dest_file.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(item, dest_file)
+                dest_file = self.temp_extract_folder / item.name
+                try:
+                    shutil.copy2(item, dest_file)
+                except Exception as e:
+                    self.log(f"⚠️ Copie ignorée {item.name}: {e}")
         extracted_count = 0
         for archive in archives:
             archive_extract_folder = self.temp_extract_folder / f"extracted_{archive.stem}"

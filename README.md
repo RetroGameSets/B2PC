@@ -8,7 +8,7 @@ Prototype Python pour l'application B2PC (Backup to PC) avec interface PyQt6 et 
 ## 🚀 Fonctionnalités Principales
 
 ### Conversions Supportées
-- **CHD v5** : Conversion ISO → CHD avec `chdman.exe`
+- **ISO/CUE > CHD** : Conversion ISO → CHD avec `chdman.exe`
 - **RVZ** : Compression Wii/GameCube ISO → RVZ avec `dolphin-tool.exe`  
 - **SquashFS** : Compression dossiers → SquashFS avec `gensquashfs.exe`
 - **Xbox ISO** : Patch et conversion Xbox ISO avec `xiso.exe`
@@ -27,7 +27,7 @@ python_prototype/
 ├── main.py              # Interface PyQt6 principale
 ├── handlers/            # Package des handlers de conversion
 │   ├── base.py          # Base ConversionHandler (outils, logs, progrès)
-│   ├── chdv5.py         # CHD v5
+│   ├── chdv5.py         # ISO/CUE > CHD
 │   ├── rvz.py           # RVZ
 │   ├── squashfs.py      # wSquashFS (compress/extract)
 │   └── xbox_patch.py    # Patch Xbox ISO
@@ -63,7 +63,7 @@ python main.py
 ### Interface PyQt6
 - **Sélection source** : Dossier contenant les fichiers à convertir
 - **Sélection destination** : Dossier de sortie des conversions
-- **Choix du type** : CHD v5, RVZ, SquashFS, ou Xbox ISO
+- **Choix du type** : ISO/CUE > CHD, RVZ, SquashFS, ou Xbox ISO
 - **Progression** : Barre de progression temps réel + logs détaillés
 - **Contrôles** : Boutons Start/Stop pour gérer les conversions
 

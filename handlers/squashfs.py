@@ -74,11 +74,14 @@ class SquashFSHandler(ConversionHandler):
         if self.check_should_stop():
             return False
         self.log(f"📦 Compression du dossier: {folder_path.name}")
+        # IMPORTANT: pour gensquashfs, le fichier de sortie DOIT être le DERNIER argument
         args = [
-            "--pack-dir", str(folder_path), str(output_file),
+            "--pack-dir", str(folder_path),
             "--compressor", "zstd",
             "--block-size", "1048576",
-            "--num-jobs", "8"
+            "--num-jobs", "8",
+            "--force",  # écrase si existe
+            str(output_file)
         ]
         self.log(f"🔧 Commande: gensquashfs.exe {' '.join(args)}")
         if self.run_tool("gensquashfs.exe", args):
@@ -108,7 +111,7 @@ class SquashFSHandler(ConversionHandler):
                     self.log(f"📦 Extraction de l'archive: {source_item.name}")
                     try:
                         extracted_folder = self.extract_single_archive(source_item)
-                        squashfs_files = list(extracted_folder.rglob("*.wsquashfs"))
+                        squashfs_files = [p for p in extracted_folder.iterdir() if p.is_file() and p.suffix.lower()==".wsquashfs"]
                         self.log(f"📁 Trouvé {len(squashfs_files)} fichiers SquashFS dans l'archive")
                     except Exception as e:
                         self.log(f"❌ Échec extraction archive {source_item.name}: {str(e)}")
@@ -150,7 +153,7 @@ class SquashFSHandler(ConversionHandler):
     def get_all_source_files_extract(self, file_extension: str) -> list:
         source_path = Path(self.source_folder)
         files_list = []
-        direct_files = list(source_path.rglob(f"*{file_extension}"))
+        direct_files = [p for p in source_path.iterdir() if p.is_file() and p.suffix.lower() == file_extension.lower()]
         for file_path in direct_files:
             files_list.append((str(file_path), None))
         archives = self.detect_archives(source_path)
@@ -159,7 +162,7 @@ class SquashFSHandler(ConversionHandler):
         return files_list
     def convert(self) -> dict:
         source_path = Path(self.source_folder)
-        wsquashfs_files = list(source_path.rglob("*.wsquashfs"))
+        wsquashfs_files = [p for p in source_path.iterdir() if p.is_file() and p.suffix.lower() == ".wsquashfs"]
         directories = [item for item in source_path.iterdir() if item.is_dir()]
         if wsquashfs_files:
             self.log("🔍 Fichiers .wsquashfs détectés → Mode extraction")

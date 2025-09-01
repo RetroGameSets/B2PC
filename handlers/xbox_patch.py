@@ -24,7 +24,7 @@ class XboxPatchHandler(ConversionHandler):
                     self.log(f"📦 Extraction de l'archive: {source_item.name}")
                     try:
                         extracted_folder = self.extract_single_archive(source_item)
-                        iso_files = list(extracted_folder.rglob("*.iso"))
+                        iso_files = [p for p in extracted_folder.iterdir() if p.is_file() and p.suffix.lower()==".iso"]
                         self.log(f"📁 Trouvé {len(iso_files)} ISOs dans l'archive")
                     except Exception as e:
                         self.log(f"❌ Échec extraction {source_item.name}: {str(e)}")
