@@ -135,7 +135,6 @@ class ConversionHandler:
             if self.check_should_stop():
                 return False
             if self.current_process.returncode == 0:
-                self.log(f"✅ {tool_name} terminé avec succès")
                 return True
             else:
                 if not show_output:

@@ -1,4 +1,4 @@
-APP_VERSION = "3.6.0.4"
+APP_VERSION = "3.6.0.5"
 UPDATE_URL = "https://raw.githubusercontent.com/RetroGameSets/B2PC/refs/heads/main/ressources/last_version.json"  # À adapter selon votre repo
 
 import os
@@ -81,9 +81,17 @@ class WorkerThread(QThread):
     
     def stop_conversion(self):
         """Arrête la conversion en cours"""
+        # Peut être appelé très tôt : assurer flag d'arrêt
         if self.handler:
-            self.handler.stop_conversion()
-            self.log_both("🛑 Demande d'arrêt envoyée au handler")
+            try:
+                self.handler.stop_conversion()
+            except Exception as e:
+                self.log_both(f"⚠️ Erreur stop handler: {e}")
+            else:
+                self.log_both("🛑 Demande d'arrêt envoyée au handler")
+        else:
+            # Pas encore de handler instancié : simplement log + rien à tuer ici
+            self.log_both("🛑 Demande d'arrêt enregistrée (handler non initialisé)")
 
     def setup_logging(self):
         """Configure le système de logging avec fichier"""
@@ -435,13 +443,15 @@ class B2PCMainWindow(QMainWindow):
             'Conversion': 'Conversion',
             'ISO/CUE > CHD': 'ISO/CUE > CHD',
             'ISO/CUE > CHD DVD': 'ISO/CUE > CHD DVD',
-            'Extract CHD > BIN/CUE': 'Extract CHD > BIN/CUE',
+            'Extraire CHD': 'Extract CHD',
             'Merge BIN/CUE': 'Merge BIN/CUE',
             'GC/WII ISO to RVZ': 'GC/WII ISO to RVZ',
             'WII ISO to WBFS': 'WII ISO to WBFS',
             'Compression / Décompression': 'Compression / Decompression',
             'Compression wSquashFS': 'wSquashFS Compression',
             'Décompression wSquashFS': 'wSquashFS Extraction',
+            'Compression': 'Compress',
+            'Décompression': 'Decompression',
             'Outils': 'Tools',
             'Patch Xbox ISO': 'Patch Xbox ISO',
             'Eteindre la lumière 🌙': 'Enable dark mode 🌙',
@@ -503,7 +513,14 @@ class B2PCMainWindow(QMainWindow):
             "Erreur sauvegarde": "Save error",
             "Dossier temporaire créé": "Temporary folder created",
             "Dossier temporaire nettoyé": "Temporary folder cleaned",
-            "Erreur nettoyage dossier temporaire": "Temp folder cleanup error"
+            "Erreur nettoyage dossier temporaire": "Temp folder cleanup error",
+            "Type détecté": "Detected type",
+            "Déjà extrait": "Already extracted",
+            "Impossible de lire infos CHD": "Unable to read CHD info",
+            "Échec extraction DVD": "DVD extraction failed",
+            "Échec extraction CD": "CD extraction failed",
+            "Extrait" : "Extracted",
+            "Aucun fichier CHD trouvé": "No CHD file found"
         }
 
         # Charger les paramètres persistants puis configuration UI
@@ -715,7 +732,7 @@ class B2PCMainWindow(QMainWindow):
         compress_group = self.create_button_group(
             "Décompression",
             [
-                ("Extract CHD > BIN/CUE", self.extract_chd, "#22c55e"),
+                ("Extraire CHD", self.extract_chd, "#22c55e"),
                 ("Décompression wSquashFS", self.extract_wsquashfs, "#eab308")
             ]
         )
@@ -1098,7 +1115,8 @@ class B2PCMainWindow(QMainWindow):
     def convert_chd_v5(self):
         self.show_conversion_dialog("Conversion ISO/CUE > CHD")
     def extract_chd(self):
-        self.show_conversion_dialog("Extract CHD")
+        # Utiliser l'intitulé FR comme clé de traduction
+        self.show_conversion_dialog("Extraire CHD")
     
     def merge_bin_cue(self):
         self.show_conversion_dialog("Merge BIN/CUE")

@@ -1,8 +1,50 @@
 from .base import ConversionHandler
 from pathlib import Path
+import subprocess
+import re
 
 class ExtractChdHandler(ConversionHandler):
     """Handler pour extraction CHD vers BIN/CUE"""
+    def _detect_chd_type(self, chd_path: Path) -> str:
+        """Détecte le type du CHD (CD ou DVD) via 'chdman info'.
+
+        Retourne 'CD' ou 'DVD'. Si indéterminé, retourne 'CD' par défaut.
+        Heuristiques :
+          - Présence de Tag='DVD dans une ligne Metadata
+          - Présence de TRACK:1 => CD
+          - Taille logique (> ~1.5GB) => DVD
+        """
+        chdman = self.tools_path / 'chdman.exe' if hasattr(self, 'tools_path') else Path('ressources/chdman.exe')
+        try:
+            proc = subprocess.run([str(chdman), 'info', '--input', str(chd_path)], capture_output=True, text=True, timeout=30)
+            output = (proc.stdout + '\n' + proc.stderr).splitlines()
+        except Exception as e:
+            self.log(f"⚠️ Impossible de lire infos CHD ({chd_path.name}) : {e}")
+            return 'CD'
+
+        logical_size = None
+        is_dvd = False
+        for line in output:
+            line = line.strip()
+            if "Tag='DVD" in line:
+                is_dvd = True
+            if 'TRACK:1' in line:
+                # Indique généralement un CD, on note mais on continue pour détecter un tag DVD éventuel
+                pass
+            if line.startswith('Logical size:'):
+                # Extraire nombre d'octets
+                digits = re.sub(r'[^0-9]', '', line.split(':', 1)[1])
+                if digits:
+                    try:
+                        logical_size = int(digits)
+                    except Exception:
+                        logical_size = None
+        if not is_dvd and logical_size is not None:
+            # Seuil 1.5 Go
+            if logical_size > 1_500 * 1024 * 1024:
+                is_dvd = True
+        return 'DVD' if is_dvd else 'CD'
+
     def convert(self) -> dict:
         """Extrait les fichiers CHD en BIN/CUE avec chdman.exe"""
         dest_path = Path(self.dest_folder)
@@ -32,22 +74,42 @@ class ExtractChdHandler(ConversionHandler):
                 if self.check_should_stop():
                     break
                 base_name = chd_file.stem
-                cue_file = dest_path / f"{base_name}.cue"
-                bin_file = dest_path / f"{base_name}.bin"
-                if bin_file.exists() and cue_file.exists():
-                    self.log(f"⏭️ Déjà extrait : {bin_file.name} / {cue_file.name}")
-                    continue
-                args = [
-                    "extractcd",
-                    "-i", str(chd_file),
-                    "-o", str(cue_file)
-                ]
-                if self.run_tool("chdman.exe", args, show_output=True):
-                    extracted += 1
-                    self.log(f"✅ Extrait : {chd_file.name} → {bin_file.name} / {cue_file.name}")
+                chd_type = self._detect_chd_type(chd_file)
+                if chd_type == 'DVD':
+                    iso_file = dest_path / f"{base_name}.iso"
+                    if iso_file.exists():
+                        self.log(f"⏭️ Déjà extrait (DVD) : {iso_file.name}")
+                        continue
+                    self.log(f"🔍 Type détecté DVD pour {chd_file.name}")
+                    args = [
+                        "extractdvd",
+                        "-i", str(chd_file),
+                        "-o", str(iso_file)
+                    ]
+                    if self.run_tool("chdman.exe", args, show_output=True):
+                        extracted += 1
+                        self.log(f"✅ Extrait : {chd_file.name} → {iso_file.name}")
+                    else:
+                        errors += 1
+                        self.log(f"❌ Échec extraction DVD : {chd_file.name}")
                 else:
-                    errors += 1
-                    self.log(f"❌ Échec extraction : {chd_file.name}")
+                    cue_file = dest_path / f"{base_name}.cue"
+                    bin_file = dest_path / f"{base_name}.bin"
+                    if bin_file.exists() and cue_file.exists():
+                        self.log(f"⏭️ Déjà extrait (CD) : {bin_file.name} / {cue_file.name}")
+                        continue
+                    self.log(f"🔍 Type détecté CD pour {chd_file.name}")
+                    args = [
+                        "extractcd",
+                        "-i", str(chd_file),
+                        "-o", str(cue_file)
+                    ]
+                    if self.run_tool("chdman.exe", args, show_output=True):
+                        extracted += 1
+                        self.log(f"✅ Extrait : {chd_file.name} → {bin_file.name} / {cue_file.name}")
+                    else:
+                        errors += 1
+                        self.log(f"❌ Échec extraction CD : {chd_file.name}")
             if self.check_should_stop():
                 break
         if self.should_stop:
