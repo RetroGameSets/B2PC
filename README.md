@@ -6,71 +6,68 @@
 	<img src="https://github.com/RetroGameSets/B2PC/blob/main/ressources/images/Home_screen_2.png" alt="Home Screen 2" width="800" />
 </p>
 
-Outil batch pour préparer et optimiser des collections de jeux rétro avec une interface PyQt6 bilingue (FR / EN).
+Batch tool to prepare and optimize retro game collections with a bilingual PyQt6 interface (FR / EN).
 
 ## 🤝 Support
 Discord: https://discord.gg/Vph9jwg3VV
 
-## ✨ Fonctionnalités
-- ISO / CUE → CHD (détection automatique CD / DVD)
-- Extraction CHD → BIN/CUE (CD) ou ISO (DVD)
-- Conversion GameCube / Wii ISO → RVZ
-- Compression / Décompression wSquashFS
-- Patch ISO Xbox (xISO pour xemu)
-- Gestion des archives (ZIP / RAR / 7Z)
-- Logs temps réel
-- Mode sombre / clair
-- Anglais / Français
+## ✨ Features
+- ISO / CUE → CHD (auto CD / DVD detection)
+- CHD extraction → BIN/CUE (CD) or ISO (DVD)
+- GameCube / Wii ISO → RVZ conversion
+- wSquashFS compression / extraction
+- Xbox ISO patch (xISO for xemu)
+- Archive handling (ZIP / RAR / 7Z)
+- Real-time logs
+- Dark / light mode
+- English / French UI
 
-## 🧩 Outils externes requis (dossier `ressources/`)
+## 🧩 Required external tools (`ressources/` folder)
 `chdman.exe`, `dolphin-tool.exe`, `gensquashfs.exe`, `unsquashfs.exe`, `xiso.exe`, `7za.exe`.
 
-## 🚀 Télécharger la derniere version pour Windows
+## 🚀 Download latest Windows build
 https://github.com/RetroGameSets/B2PC/releases/latest
 
+## 🖥️ Usage
+1. Select source folder (files or archives)
+2. Select destination folder
+3. Click an operation (e.g. ISO/CUE > CHD, Extract CHD, RVZ...)
+4. Follow progress & logs
 
-## 🖥️ Utilisation
-1. Choisir dossier source (fichiers ou archives)
-2. Choisir dossier destination
-3. Cliquer une opération (ex: ISO/CUE > CHD, Extraire CHD, RVZ...)
-4. Suivre la progression et logs
+## Logs
+Logs are stored in `LOG/` (one file per operation). Export available from the log window.
 
-##  Logs
-Les journaux sont stockés dans `LOG/` (un fichier par opération). Export possible depuis la fenêtre de logs.
+## Language
+FR / EN switch in footer. Buttons and log fragments are retranslated live.
 
-## 🌐 Langue
-Commutateur FR / EN dans le footer. Les boutons et logs sont retraduits dynamiquement.
-
-
- 
 ## 📋 Changelog
 
 ### v3.6.0.5
-- Détection automatique CD/DVD lors de l'extraction CHD → utilise `chdman info` puis `extractcd` ou `extractdvd`.
-- Bouton renommé : "Extraire CHD" (FR) / "Extract CHD" (EN).
-- Traductions FR/EN étendues (boutons logs, fragments d’erreurs, types CHD).
+- Automatic CD/DVD detection for CHD extraction → uses `chdman info` then `extractcd` or `extractdvd`.
+- Button renamed: "Extraire CHD" (FR) / "Extract CHD" (EN).
+- Extended FR/EN translations (log buttons, error fragments, CHD types).
 
 ### v3.6.0.4
-- Info CHD : affichage rapide sans lancer de conversion lorsqu’aucun fichier n’est présent.
-- Fenêtre de logs traduisible dynamiquement (boutons Stop / Save / Close / Open folder).
+- CHD Info: fast display without starting conversion when no file present.
+- Log dialog dynamically translatable (Stop / Save / Close / Open folder buttons).
 
 ### v3.6.0.3
-- Politique non récursive : traitement uniquement des fichiers au niveau racine + archives.
-- Ajustements SquashFS (détection et extraction non récursive).
+- Non‑recursive policy: only root-level files + archives processed.
+- SquashFS adjustments (non‑recursive detection & extraction).
 
 ### v3.6.0.2
-- Stabilisation exécution `gensquashfs` / `unsquashfs` (DLL côté ressources, ordre arguments, `--force`).
-- Amélioration logs (nom fichier sécurisé, nettoyage emojis pour fichier).
+- Stabilized `gensquashfs` / `unsquashfs` execution (DLL context, arg order, `--force`).
+- Log improvements (sanitized filenames, emoji cleanup for file output).
 
 ### v3.6.0.1
-- Amélioration arrêt conversions : suivi du process courant + terminaison propre.
-- Ajout traduction dynamique fragments de logs.
+- Improved stop logic: track running process + clean termination.
+- Added dynamic translation of log fragments.
 
-### Versions antérieures (2.x - 3.5)
-- Progression temps réel via parsing stdout.
-- Extract-on-the-fly des archives (économie espace disque).
-- Mode sombre / clair.
-- Patch ISO Xbox + nettoyage des temporaires.
+### Previous versions (2.x - 3.5)
+- Real‑time progress via stdout parsing.
+- Archive extract‑on‑the‑fly (disk space savings).
+- Dark / light mode.
+- Xbox ISO patch + temp cleanup.
 
 ---
-Pour l’historique complet : voir les tags Git ou anciens commits.
+For full history: see Git tags or earlier commits.
