@@ -1,5 +1,11 @@
 # B2PC
 
+<p align="center">
+	<img src="https://github.com/RetroGameSets/B2PC/blob/main/ressources/images/Home_screen.png" alt="Home Screen 1" width="800" />
+	<br/>
+	<img src="https://github.com/RetroGameSets/B2PC/blob/main/ressources/images/Home_screen_2.png" alt="Home Screen 2" width="800" />
+</p>
+
 Outil batch pour préparer et optimiser des collections de jeux rétro avec une interface PyQt6 bilingue (FR / EN).
 
 ## 🤝 Support
