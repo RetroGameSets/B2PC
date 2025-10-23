@@ -441,8 +441,8 @@ class B2PCMainWindow(QMainWindow):
             'Dossier destination:': 'Destination folder:',
             'Sélectionnez un dossier destination...': 'Select a destination folder...',
             'Conversion': 'Conversion',
-            'ISO/CUE > CHD': 'ISO/CUE > CHD',
-            'ISO/CUE > CHD DVD': 'ISO/CUE > CHD DVD',
+            'ISO/CUE/GDI > CHD': 'ISO/CUE/GDI > CHD',
+            'ISO/CUE/GDI > CHD DVD': 'ISO/CUE/GDI > CHD DVD',
             'Extraire CHD': 'Extract CHD',
             'Merge BIN/CUE': 'Merge BIN/CUE',
             'GC/WII ISO to RVZ': 'GC/WII ISO to RVZ',
@@ -462,8 +462,8 @@ class B2PCMainWindow(QMainWindow):
             '💾 Sauvegarder logs': '💾 Save logs',
             'Ouvrir dossier LOG': 'Open LOG folder',
             'Logs de conversion': 'Conversion logs',
-            'Conversion ISO/CUE > CHD': 'ISO/CUE > CHD Conversion',
-            'Conversion ISO/CUE > CHD DVD': 'ISO/CUE > CHD DVD Conversion',
+            'Conversion ISO/CUE/GDI > CHD': 'ISO/CUE/GDI > CHD Conversion',
+            'Conversion ISO/CUE/GDI > CHD DVD': 'ISO/CUE/GDI > CHD DVD Conversion',
             'Extract CHD': 'Extract CHD',
             'Merge BIN/CUE': 'Merge BIN/CUE',
             'Conversion ISO vers RVZ': 'ISO to RVZ Conversion',
@@ -719,7 +719,7 @@ class B2PCMainWindow(QMainWindow):
         conv_group = self.create_button_group(
             "Compression",
             [
-                ("ISO/CUE > CHD", self.convert_chd_v5, "#22c55e"),                
+                ("ISO/CUE/GDI > CHD", self.convert_chd_v5, "#22c55e"),                
                 ("Compression wSquashFS", self.compress_wsquashfs, "#eab308"),
                 ("GC/WII ISO to RVZ", self.convert_iso_rvz, "#22c55e"),
                 ("WII ISO to WBFS", None, "#22c55e", True),  # Désactivé
@@ -1113,7 +1113,7 @@ class B2PCMainWindow(QMainWindow):
     
     # Méthodes de conversion (callbacks des boutons)
     def convert_chd_v5(self):
-        self.show_conversion_dialog("Conversion ISO/CUE > CHD")
+        self.show_conversion_dialog("Conversion ISO/CUE/GDI > CHD")
     def extract_chd(self):
         # Utiliser l'intitulé FR comme clé de traduction
         self.show_conversion_dialog("Extraire CHD")

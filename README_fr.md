@@ -31,7 +31,7 @@ https://github.com/RetroGameSets/B2PC/releases/latest
 ## 🖥️ Utilisation
 1. Choisir dossier source (fichiers ou archives)
 2. Choisir dossier destination
-3. Cliquer une opération (ex: ISO/CUE > CHD, Extraire CHD, RVZ...)
+3. Cliquer une opération (ex: ISO/CUE/GDI > CHD, Extraire CHD, RVZ...)
 4. Suivre la progression et logs
 
 ##  Logs
