@@ -1,4 +1,4 @@
-APP_VERSION = "3.6.0.5"
+APP_VERSION = "3.6.1"
 UPDATE_URL = "https://raw.githubusercontent.com/RetroGameSets/B2PC/refs/heads/main/ressources/last_version.json"  # À adapter selon votre repo
 
 import os

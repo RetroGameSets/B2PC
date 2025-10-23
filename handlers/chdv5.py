@@ -2,9 +2,10 @@ from .base import ConversionHandler
 from pathlib import Path
 
 class ChdV5Handler(ConversionHandler):
-    """Handler unifié ISO/CUE > CHD :
+    """Handler unifié ISO/CUE/GDI > CHD :
     - .cue  => createcd
     - .iso  => createdvd
+    - .gdi  => createcd
     Détection automatique selon l'extension, un seul bouton dans l'UI."""
 
     def convert(self) -> dict:
@@ -14,8 +15,9 @@ class ChdV5Handler(ConversionHandler):
             # Récupérer sources mixtes (ISO + CUE) + archives contenant ces formats
             source_files_iso = self.get_all_source_files(".iso")
             source_files_cue = self.get_all_source_files(".cue")
-            source_files = source_files_iso + source_files_cue
-            self.log(f"📁 Sources détectées : {len(source_files)} (.iso / .cue / archives)")
+            source_files_gdi = self.get_all_source_files(".gdi")
+            source_files = source_files_iso + source_files_cue + source_files_gdi
+            self.log(f"📁 Sources détectées : {len(source_files)} (.iso / .cue / .gdi / archives)")
 
             converted = 0
             errors = 0
@@ -36,7 +38,7 @@ class ChdV5Handler(ConversionHandler):
                         # Non récursif: uniquement fichiers directement extraits au premier niveau
                         input_files = []
                         for item in extracted_folder.iterdir():
-                            if item.is_file() and item.suffix.lower() in (".iso", ".cue"):
+                            if item.is_file() and item.suffix.lower() in (".iso", ".cue", ".gdi"):
                                 input_files.append(item)
                         self.log(f"🗂️ Trouvé {len(input_files)} fichiers exploitables dans l'archive")
                     except Exception as e:
@@ -60,6 +62,8 @@ class ChdV5Handler(ConversionHandler):
                         cmd = "createcd"
                     elif ext == ".iso":
                         cmd = "createdvd"
+                    elif ext == ".gdi":
+                        cmd = "createcd"
                     else:
                         self.log(f"⚠️ Extension ignorée: {input_file.name}")
                         continue
