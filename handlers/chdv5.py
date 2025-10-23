@@ -12,11 +12,8 @@ class ChdV5Handler(ConversionHandler):
         dest_path = Path(self.dest_folder)
         dest_path.mkdir(exist_ok=True)
         try:
-            # Récupérer sources mixtes (ISO + CUE) + archives contenant ces formats
-            source_files_iso = self.get_all_source_files(".iso")
-            source_files_cue = self.get_all_source_files(".cue")
-            source_files_gdi = self.get_all_source_files(".gdi")
-            source_files = source_files_iso + source_files_cue + source_files_gdi
+            # Récupérer sources mixtes (ISO + CUE + GDI) + archives (détection unique)
+            source_files = self.get_multiple_source_files([".iso", ".cue", ".gdi"])
             self.log(f"📁 Sources détectées : {len(source_files)} (.iso / .cue / .gdi / archives)")
 
             converted = 0

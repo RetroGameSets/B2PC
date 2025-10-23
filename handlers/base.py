@@ -224,6 +224,23 @@ class ConversionHandler:
         else:
             self.log(f"❌ Échec extraction: {archive_path.name}")
             return False
+    def get_multiple_source_files(self, extensions: List[str]) -> List[tuple]:
+        """Récupère tous les fichiers avec les extensions données + archives (détection unique)."""
+        source_path = Path(self.source_folder)
+        files_list = []
+        
+        # Fichiers uniquement au niveau racine
+        for file_path in source_path.iterdir():
+            if file_path.is_file() and file_path.suffix.lower() in [ext.lower() for ext in extensions]:
+                files_list.append((file_path, None))
+        
+        # Détecter les archives une seule fois
+        archives = self.detect_archives(source_path)
+        for archive in archives:
+            files_list.append((archive, "archive"))
+        
+        return files_list
+
     def get_all_source_files(self, file_extension: str) -> List[tuple]:
         source_path = Path(self.source_folder)
         files_list = []

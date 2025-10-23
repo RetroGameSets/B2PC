@@ -1,4 +1,4 @@
-APP_VERSION = "3.6.1"
+APP_VERSION = "3.6.1.1"
 UPDATE_URL = "https://raw.githubusercontent.com/RetroGameSets/B2PC/refs/heads/main/ressources/last_version.json"  # À adapter selon votre repo
 
 import os
@@ -173,7 +173,7 @@ class WorkerThread(QThread):
             self.progress_update.emit(progress, msg)
         
         try:
-            if self.operation == "Conversion ISO/CUE > CHD":
+            if self.operation == "Conversion ISO/CUE/GDI > CHD":
                 self.handler = ChdV5Handler(str(tools_path), log_callback, progress_callback)
             elif "Extract CHD" in self.operation:
                 self.handler = ExtractChdHandler(str(tools_path), log_callback, progress_callback)
