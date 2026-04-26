@@ -17,13 +17,14 @@ Discord: https://discord.gg/Vph9jwg3VV
 - GameCube / Wii ISO → RVZ conversion
 - wSquashFS compression / extraction
 - Xbox ISO patch (xISO for xemu)
+- PS3 ISO decryption + extraction to .ps3 folder
 - Archive handling (ZIP / RAR / 7Z)
 - Real-time logs
 - Dark / light mode
 - English / French UI
 
 ## 🧩 Required external tools (`ressources/` folder)
-`chdman.exe`, `dolphin-tool.exe`, `gensquashfs.exe`, `unsquashfs.exe`, `xiso.exe`, `7za.exe`.
+`chdman.exe`, `dolphin-tool.exe`, `gensquashfs.exe`, `unsquashfs.exe`, `xiso.exe`, `ps3dec_win.exe`.
 
 ## 🚀 Download latest Windows build
 https://github.com/RetroGameSets/B2PC/releases/latest

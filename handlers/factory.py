@@ -2,13 +2,15 @@ from .chdv5 import ChdV5Handler
 from .rvz import RvzHandler
 from .xbox_patch import XboxPatchHandler
 from .squashfs import SquashFSHandler
+from .ps3 import Ps3DecryptHandler
 
 def create_handler(handler_type: str, tools_path, log_callback, progress_callback):
     handlers = {
         "chd_v5": ChdV5Handler,
         "rvz": RvzHandler,
         "xbox_patch": XboxPatchHandler,
-        "squashfs": SquashFSHandler
+        "squashfs": SquashFSHandler,
+        "ps3_decrypt": Ps3DecryptHandler
     }
     if handler_type not in handlers:
         raise ValueError(f"Handler type '{handler_type}' not supported")

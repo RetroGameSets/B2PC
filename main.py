@@ -1,5 +1,5 @@
-APP_VERSION = "3.6.1.1"
-UPDATE_URL = "https://raw.githubusercontent.com/RetroGameSets/B2PC/refs/heads/main/ressources/last_version.json"  # À adapter selon votre repo
+APP_VERSION = "3.6.2.0"
+UPDATE_URL = "https://raw.githubusercontent.com/RetroGameSets/B2PC/refs/heads/main/ressources/last_version.json"
 
 import os
 import sys
@@ -8,7 +8,7 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QGridLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QProgressBar,
-    QFileDialog, QDialog, QComboBox
+    QFileDialog, QDialog, QComboBox, QCheckBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QCursor
@@ -22,6 +22,7 @@ from handlers.squashfs import SquashFSHandler
 from handlers.xbox_patch import XboxPatchHandler
 from handlers.extract_chd import ExtractChdHandler
 from handlers.merge_bin_cue import MergeBinCueHandler
+from handlers.ps3 import Ps3DecryptHandler
 from handlers.base import ConversionHandler
 import json
 import re
@@ -147,9 +148,23 @@ class WorkerThread(QThread):
             # Conversion réelle obligatoire
             self.log_both("⚡ Mode conversion réelle activé")
             results = self.run_conversion()
-            
+
+            error_count = 0
+            has_error = False
+            if isinstance(results, dict):
+                has_error = bool(results.get('error'))
+                try:
+                    error_count = int(results.get('error_count', 0) or 0)
+                except Exception:
+                    error_count = 0
+
             self.log_both("=" * 50)
-            self.log_both("🎉 Opération terminée avec succès!")
+            if has_error:
+                self.log_both("❌ Opération terminée avec erreur")
+            elif error_count > 0:
+                self.log_both(f"⚠️ Opération terminée avec {error_count} erreur(s)")
+            else:
+                self.log_both("🎉 Opération terminée avec succès!")
             self.log_both(f"📄 Log sauvegardé: {self.log_file}")
             
             self.finished.emit(results)
@@ -175,7 +190,7 @@ class WorkerThread(QThread):
         try:
             if self.operation == "Conversion ISO/CUE/GDI > CHD":
                 self.handler = ChdV5Handler(str(tools_path), log_callback, progress_callback)
-            elif "Extract CHD" in self.operation:
+            elif any(k in self.operation for k in ("Extraire CHD", "Extract CHD")):
                 self.handler = ExtractChdHandler(str(tools_path), log_callback, progress_callback)
             elif "Merge BIN/CUE" in self.operation:
                 self.handler = MergeBinCueHandler(str(tools_path), log_callback, progress_callback)
@@ -185,6 +200,8 @@ class WorkerThread(QThread):
                 self.handler = SquashFSHandler(str(tools_path), log_callback, progress_callback)
             elif "Xbox" in self.operation:
                 self.handler = XboxPatchHandler(str(tools_path), log_callback, progress_callback)
+            elif "PS3" in self.operation:
+                self.handler = Ps3DecryptHandler(str(tools_path), log_callback, progress_callback)
             else:
                 raise ValueError(f"Handler non disponible pour: {self.operation}")
 
@@ -288,9 +305,20 @@ class LogDialog(QDialog):
         parent = self.parent()
         if parent and isinstance(parent, B2PCMainWindow) and parent.language == 'en':
             self.apply_language('en', parent.translations_en)
-        
-        if results.get('stopped', False):
+
+        error_count = 0
+        has_error = False
+        if isinstance(results, dict):
+            has_error = bool(results.get('error'))
+            try:
+                error_count = int(results.get('error_count', 0) or 0)
+            except Exception:
+                error_count = 0
+
+        if isinstance(results, dict) and results.get('stopped', False):
             self.add_log("🛑 Conversion arrêtée par l'utilisateur")
+        elif has_error or error_count > 0:
+            self.add_log("⚠️ Conversion terminée avec erreurs")
         else:
             self.add_log("✅ Conversion terminée")
     
@@ -308,6 +336,8 @@ class LogDialog(QDialog):
         # Déterminer la couleur selon le type de message
         if "❌" in message or "Erreur" in message or "Échec" in message:
             color = "#dc2626"  # Rouge
+        elif "⚠️" in message or "erreur(s)" in message or "avec erreurs" in message:
+            color = "#eab308"  # Jaune
         elif "✅" in message or "Succès" in message or "terminée" in message:
             color = "#16a34a"  # Vert
         elif "⏳" in message or "🔄" in message or "Traitement" in message:
@@ -430,6 +460,7 @@ class B2PCMainWindow(QMainWindow):
         self.log_dialog = None
         # Charger paramétrage (langue) avant construction UI
         self.language = 'fr'
+        self.remember_folders = True
         self._settings = {}
         self._translation_store = []  # Liste de tuples (widget, base_text_key, dynamic_callable?)
 
@@ -440,6 +471,7 @@ class B2PCMainWindow(QMainWindow):
             'Parcourir': 'Browse',
             'Dossier destination:': 'Destination folder:',
             'Sélectionnez un dossier destination...': 'Select a destination folder...',
+            'Mémoriser dossiers source/destination': 'Remember source/destination folders',
             'Conversion': 'Conversion',
             'ISO/CUE/GDI > CHD': 'ISO/CUE/GDI > CHD',
             'ISO/CUE/GDI > CHD DVD': 'ISO/CUE/GDI > CHD DVD',
@@ -454,6 +486,7 @@ class B2PCMainWindow(QMainWindow):
             'Décompression': 'Decompression',
             'Outils': 'Tools',
             'Patch Xbox ISO': 'Patch Xbox ISO',
+            'Décrypter ISO PS3': 'Decrypt PS3 ISO',
             'Eteindre la lumière 🌙': 'Enable dark mode 🌙',
             'Allumer la lumière ☀️': 'Disable dark mode ☀️',
             '🛑 Arrêter': '🛑 Stop',
@@ -469,6 +502,7 @@ class B2PCMainWindow(QMainWindow):
             'Conversion ISO vers RVZ': 'ISO to RVZ Conversion',
             'Décompression wSquashFS': 'wSquashFS Extraction',
             'Patch Xbox ISO': 'Patch Xbox ISO',
+            'Décrypter ISO PS3': 'Decrypt PS3 ISO',
             'Infos CHD': 'CHD Info',
             'Analyse CHD': 'CHD Analysis',
             'Taille originale': 'Original size',
@@ -480,15 +514,19 @@ class B2PCMainWindow(QMainWindow):
         # Fragments de traduction pour les messages de log (FR -> EN)
         self.log_translations_en = {
             "Début de l'opération": "Start of operation",
+            "Décrypter ISO PS3": "Decrypt PS3 ISO",
             "Dossier source": "Source folder",
             "Dossier destination": "Destination folder",
             "Mode conversion réelle activé": "Real conversion mode enabled",
             "Opération terminée avec succès": "Operation completed successfully",
+            "Opération terminée avec erreur": "Operation finished with error",
+            "Opération terminée avec": "Operation finished with",
             "Log sauvegardé": "Log saved",
             "Erreur critique": "Critical error",
             "Demande d'arrêt envoyée": "Stop request sent",
             "Conversion arrêtée par l'utilisateur": "Conversion stopped by user",
             "Conversion terminée": "Conversion finished",
+            "Conversion terminée avec erreurs": "Conversion finished with errors",
             "Fichier de log créé": "Log file created",
             "Outil manquant": "Missing tool",
             "Tous les outils sont présents": "All required tools are present",
@@ -501,6 +539,22 @@ class B2PCMainWindow(QMainWindow):
             "Archive extraite": "Archive extracted",
             "Échec extraction": "Extraction failed",
             "Extraction archive": "Extracting archive",
+            "Détecté": "Detected",
+            "niveau racine": "root level",
+            "Outils PS3 detectes": "PS3 tools detected",
+            "Traitement de": "Processing",
+            "source(s) PS3": "PS3 source(s)",
+            "Trouve": "Found",
+            "ISO(s) dans l'archive": "ISO(s) in archive",
+            "Recherche de cle dans": "Searching key in",
+            "Cle trouvee dans zip": "Key found in zip",
+            "Decryptage PS3": "PS3 decryption",
+            "Moteur 7z utilise": "7z engine used",
+            "Extraction ISO PS3": "PS3 ISO extraction",
+            " vers:": " to:",
+            "Jeu PS3 decrypte et extrait": "PS3 game decrypted and extracted",
+            "Exécution :": "Execution :",
+            "Execution completed in": "Execution completed in",
             "Fichier déjà converti": "File already converted",
             "Déjà converti": "Already converted",
             "Échec conversion": "Conversion failed",
@@ -527,10 +581,12 @@ class B2PCMainWindow(QMainWindow):
         self._settings = self.load_settings()
         if isinstance(self._settings, dict):
             self.language = self._settings.get('language', 'fr')
+            self.remember_folders = bool(self._settings.get('remember_folders', True))
         # Charger la configuration UI
         self.ui_config = self.load_ui_config()
 
         self.init_ui()
+        self.restore_folder_settings()
         self.apply_styles()
         # Appliquer la langue chargée
         if self.language == 'en':
@@ -564,13 +620,66 @@ class B2PCMainWindow(QMainWindow):
     def save_settings(self):
         try:
             cfg_file = self.get_config_dir() / 'settings.json'
+            source_saved = self.source_folder if self.remember_folders else ''
+            dest_saved = self.dest_folder if self.remember_folders else ''
             data = {
-                'language': self.language
+                'language': self.language,
+                'remember_folders': self.remember_folders,
+                'source_folder': source_saved,
+                'dest_folder': dest_saved
             }
             with open(cfg_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception:
             pass
+
+    def get_default_dest_for_source(self, source_folder: str) -> str:
+        source_path = Path(source_folder)
+        default_dest = source_path / "converted"
+        try:
+            default_dest.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            return ""
+        return str(default_dest)
+
+    def apply_default_dest_if_empty(self, source_folder: str, persist: bool = True):
+        if not source_folder:
+            return
+        if getattr(self, 'dest_input', None) and self.dest_input.text().strip():
+            return
+
+        default_dest = self.get_default_dest_for_source(source_folder)
+        if not default_dest:
+            return
+
+        self.dest_folder = default_dest
+        if getattr(self, 'dest_input', None):
+            self.dest_input.setText(default_dest)
+        if persist:
+            self.save_settings()
+
+    def restore_folder_settings(self):
+        if not isinstance(self._settings, dict):
+            return
+
+        if hasattr(self, 'remember_folders_checkbox'):
+            self.remember_folders_checkbox.setChecked(self.remember_folders)
+
+        if not self.remember_folders:
+            return
+
+        saved_source = str(self._settings.get('source_folder', '') or '').strip()
+        saved_dest = str(self._settings.get('dest_folder', '') or '').strip()
+
+        if saved_source and Path(saved_source).exists():
+            self.source_folder = saved_source
+            self.source_input.setText(saved_source)
+
+        if saved_dest and Path(saved_dest).exists():
+            self.dest_folder = saved_dest
+            self.dest_input.setText(saved_dest)
+        elif self.source_folder and not self.dest_input.text().strip():
+            self.apply_default_dest_if_empty(self.source_folder, persist=True)
     
     def load_ui_config(self):
         """Charge la configuration UI depuis ui.json (chemin compatible PyInstaller)"""
@@ -695,6 +804,13 @@ class B2PCMainWindow(QMainWindow):
         folders_row.addWidget(dest_container)
 
         folder_layout.addLayout(folders_row)
+
+        self.remember_folders_checkbox = QCheckBox("Mémoriser dossiers source/destination")
+        self.remember_folders_checkbox.setChecked(self.remember_folders)
+        self.remember_folders_checkbox.stateChanged.connect(self.on_remember_folders_changed)
+        self._translation_store.append((self.remember_folders_checkbox, 'Mémoriser dossiers source/destination'))
+        folder_layout.addWidget(self.remember_folders_checkbox)
+
         parent_layout.addWidget(folder_container)
     
     def create_conversion_section(self, parent_layout):
@@ -744,7 +860,8 @@ class B2PCMainWindow(QMainWindow):
             [
                 ("Infos CHD", self.show_chd_info, "#a855f7"),
                 ("Patch Xbox ISO", self.patch_xbox_iso, "#a855f7"),
-                ("Merge BIN/CUE", self.merge_bin_cue, "#22c55e")
+                ("Merge BIN/CUE", self.merge_bin_cue, "#22c55e"),
+                ("Décrypter ISO PS3", self.decrypt_ps3_iso, "#a855f7")
             ]
         )
         self.button_groups.append(tools_group)
@@ -969,6 +1086,11 @@ class B2PCMainWindow(QMainWindow):
             self.retranslate_ui()
             self.save_settings()
 
+    def on_remember_folders_changed(self, _state=None):
+        if hasattr(self, 'remember_folders_checkbox'):
+            self.remember_folders = self.remember_folders_checkbox.isChecked()
+            self.save_settings()
+
     def retranslate_ui(self):
         """Applique les traductions aux widgets enregistrés."""
         for widget, base_text in self._translation_store:
@@ -1052,6 +1174,8 @@ class B2PCMainWindow(QMainWindow):
         if folder:
             self.source_folder = folder
             self.source_input.setText(folder)
+            self.apply_default_dest_if_empty(folder)
+            self.save_settings()
     
     def select_dest_folder(self):
         """Sélectionne le dossier destination"""
@@ -1059,9 +1183,13 @@ class B2PCMainWindow(QMainWindow):
         if folder:
             self.dest_folder = folder
             self.dest_input.setText(folder)
+            self.save_settings()
     
     def show_conversion_dialog(self, operation_name):
         """Affiche le dialog de conversion avec logs"""
+        if self.source_input.text().strip() and not self.dest_input.text().strip():
+            self.apply_default_dest_if_empty(self.source_input.text().strip())
+
         if not self.log_dialog:
             self.log_dialog = LogDialog(self)
         # Appliquer langue actuelle aux boutons (y compris états des boutons)
@@ -1132,6 +1260,9 @@ class B2PCMainWindow(QMainWindow):
     
     def patch_xbox_iso(self):
         self.show_conversion_dialog("Patch Xbox ISO")
+
+    def decrypt_ps3_iso(self):
+        self.show_conversion_dialog("Décrypter ISO PS3")
 
     # ------------------ CHD INFO FEATURE ------------------
     def show_chd_info(self):
