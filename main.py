@@ -577,9 +577,14 @@ class B2PCMainWindow(QMainWindow):
             "Conversion WBFS/ISO terminee": "WBFS/ISO conversion completed",
             "Outils WBFS detectes": "WBFS tools detected",
             "source(s) ISO": "ISO source(s)",
+            "source(s) ISO/RVZ": "ISO/RVZ source(s)",
             "source(s) WBFS": "WBFS source(s)",
             "Conversion ISO > WBFS terminee": "ISO > WBFS conversion completed",
             "Conversion WBFS > ISO terminee": "WBFS > ISO conversion completed",
+            "Conversion intermediaire RVZ -> ISO": "Intermediate RVZ -> ISO conversion",
+            "Echec conversion RVZ -> ISO": "RVZ -> ISO conversion failed",
+            "ISO intermediaire introuvable": "Intermediate ISO not found",
+            "Fichier ignore: ce n'est pas un ISO Wii (GameCube ou format non supporte)": "File skipped: this is not a Wii ISO (GameCube or unsupported format)",
             "Exécution :": "Execution :",
             "Execution completed in": "Execution completed in",
             "Fichier déjà converti": "File already converted",
@@ -867,7 +872,7 @@ class B2PCMainWindow(QMainWindow):
                 ("ISO/CUE/GDI > CHD", self.convert_chd_v5, "#22c55e"),                
                 ("Compression wSquashFS", self.compress_wsquashfs, "#eab308"),
                 ("GC/WII ISO to RVZ", self.convert_iso_rvz, "#22c55e"),
-                ("ISO > WBFS", self.convert_iso_to_wbfs, "#22c55e"),
+                ("WII ISO/RVZ > WBFS", self.convert_iso_to_wbfs, "#22c55e"),
                 # Bouton PS1 to PSP EBOOT retiré
             ]
         )

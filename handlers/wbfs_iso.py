@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import shutil
+import tempfile
 
 from .base import ConversionHandler
 
@@ -100,10 +101,54 @@ class WbfsIsoHandler(ConversionHandler):
 
     def _allowed_extensions(self) -> Tuple[str, ...]:
         if self.direction == "iso_to_wbfs":
-            return (".iso",)
+            return (".iso", ".rvz")
         if self.direction == "wbfs_to_iso":
             return (".wbfs",)
         return self.SUPPORTED_EXTENSIONS
+
+    def _ensure_work_folder(self) -> Path:
+        if not self.temp_extract_folder:
+            self.temp_extract_folder = Path(tempfile.mkdtemp(prefix="B2PC_wbfs_"))
+            self.log(f"📂 Dossier temporaire cree: {self.temp_extract_folder}")
+
+        work_folder = self.temp_extract_folder / "work"
+        work_folder.mkdir(parents=True, exist_ok=True)
+        return work_folder
+
+    def _prepare_input_for_wbfs(self, input_file: Path) -> Tuple[bool, Path]:
+        if input_file.suffix.lower() != ".rvz":
+            return True, input_file
+
+        self.log(f"🔄 Conversion intermediaire RVZ -> ISO: {input_file.name}")
+
+        work_folder = self._ensure_work_folder()
+        temp_iso = work_folder / f"{input_file.stem}.iso"
+
+        try:
+            if temp_iso.exists():
+                temp_iso.unlink()
+        except Exception:
+            pass
+
+        args = [
+            "convert",
+            "-f",
+            "iso",
+            "-i",
+            str(input_file),
+            "-o",
+            str(temp_iso),
+        ]
+
+        if not self.run_tool("dolphin-tool.exe", args, show_output=True):
+            self.log(f"❌ Echec conversion RVZ -> ISO: {input_file.name}")
+            return False, input_file
+
+        if not temp_iso.exists():
+            self.log(f"❌ ISO intermediaire introuvable: {temp_iso.name}")
+            return False, input_file
+
+        return True, temp_iso
 
     def _iter_files_depth_one(self, root: Path, extensions: Tuple[str, ...]) -> List[Path]:
         files: List[Path] = []
@@ -257,21 +302,30 @@ class WbfsIsoHandler(ConversionHandler):
             return None
 
     def _convert_one_file(self, input_file: Path, dest_path: Path) -> Tuple[bool, List[str]]:
-        direction = "ISO -> WBFS" if input_file.suffix.lower() == ".iso" else "WBFS -> ISO"
+        if input_file.suffix.lower() == ".rvz":
+            direction = "RVZ -> ISO -> WBFS"
+        elif input_file.suffix.lower() == ".iso":
+            direction = "ISO -> WBFS"
+        else:
+            direction = "WBFS -> ISO"
         self.log(f"🔄 Conversion {direction}: {input_file.name}")
 
-        source_before = self._snapshot_local_outputs(input_file.parent)
+        prepared_ok, prepared_input = self._prepare_input_for_wbfs(input_file)
+        if not prepared_ok:
+            return False, []
+
+        source_before = self._snapshot_local_outputs(prepared_input.parent)
         before = self._snapshot_outputs(dest_path)
-        ok = self.run_tool("wbfs_file.exe", [str(input_file)], cwd=str(dest_path), show_output=True)
+        ok = self.run_tool("wbfs_file.exe", [str(prepared_input)], cwd=str(dest_path), show_output=True)
         if not ok:
             return False, []
 
-        source_after = self._snapshot_local_outputs(input_file.parent)
+        source_after = self._snapshot_local_outputs(prepared_input.parent)
 
         relocated_name: Optional[str] = None
-        if input_file.suffix.lower() == ".iso":
+        if prepared_input.suffix.lower() == ".iso":
             relocated_name = self._relocate_wbfs_output(
-                input_file,
+                prepared_input,
                 dest_path,
                 source_before,
                 source_after,
@@ -296,7 +350,7 @@ class WbfsIsoHandler(ConversionHandler):
 
             if self.direction == "iso_to_wbfs":
                 mode_label = "ISO > WBFS"
-                source_label = "ISO"
+                source_label = "ISO/RVZ"
             elif self.direction == "wbfs_to_iso":
                 mode_label = "WBFS > ISO"
                 source_label = "WBFS"

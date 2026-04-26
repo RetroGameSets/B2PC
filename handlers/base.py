@@ -93,6 +93,7 @@ class ConversionHandler:
         flags = 0
         if sys.platform == "win32":
             flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        saw_not_wii_disc = False
         try:
             if show_output:
                 self.current_process = subprocess.Popen(
@@ -114,10 +115,14 @@ class ConversionHandler:
                         if line:
                             line = line.strip()
                             if line:
+                                line_lower = line.lower()
+                                if "not a wii disc" in line_lower:
+                                    saw_not_wii_disc = True
+
                                 progress_value = self._extract_progress(line, tool_name)
                                 if progress_value is not None:
                                     self.progress(progress_value, f"{tool_name}: {progress_value:.1f}%")
-                                elif self._is_important_message(line, tool_name):
+                                elif self._is_important_message(line, tool_name) or saw_not_wii_disc:
                                     self.log(f"   {line}")
                         elif self.current_process.poll() is not None:
                             break
@@ -140,6 +145,8 @@ class ConversionHandler:
                 if not show_output:
                     self.log(f"❌ Erreur {tool_name}: {stderr if 'stderr' in locals() else 'Erreur inconnue'}")
                 else:
+                    if tool_name == "wbfs_file.exe" and saw_not_wii_disc:
+                        self.log("⚠️ Fichier ignore: ce n'est pas un ISO Wii (GameCube ou format non supporte)")
                     self.log(f"❌ {tool_name} terminé avec erreur (code: {self.current_process.returncode})")
                 return False
         except Exception as e:
@@ -187,6 +194,9 @@ class ConversionHandler:
             ],
             "7za.exe": [
                 "everything is ok", "files", "folders"
+            ],
+            "wbfs_file.exe": [
+                "not a wii disc", "writing:", "done in"
             ]
         }
         line_lower = line.lower()
