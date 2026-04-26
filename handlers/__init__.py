@@ -6,3 +6,4 @@ from .squashfs import SquashFSHandler
 from .extract_chd import ExtractChdHandler
 from .merge_bin_cue import MergeBinCueHandler
 from .ps3 import Ps3DecryptHandler
+from .wbfs_iso import WbfsIsoHandler

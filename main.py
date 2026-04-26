@@ -1,4 +1,4 @@
-APP_VERSION = "3.6.2.0"
+APP_VERSION = "3.6.3.0"
 UPDATE_URL = "https://raw.githubusercontent.com/RetroGameSets/B2PC/refs/heads/main/ressources/last_version.json"
 
 import os
@@ -23,6 +23,7 @@ from handlers.xbox_patch import XboxPatchHandler
 from handlers.extract_chd import ExtractChdHandler
 from handlers.merge_bin_cue import MergeBinCueHandler
 from handlers.ps3 import Ps3DecryptHandler
+from handlers.wbfs_iso import WbfsIsoHandler
 from handlers.base import ConversionHandler
 import json
 import re
@@ -202,6 +203,12 @@ class WorkerThread(QThread):
                 self.handler = XboxPatchHandler(str(tools_path), log_callback, progress_callback)
             elif "PS3" in self.operation:
                 self.handler = Ps3DecryptHandler(str(tools_path), log_callback, progress_callback)
+            elif any(k in self.operation for k in ("ISO > WBFS", "WBFS > ISO", "WBFS <> ISO")):
+                self.handler = WbfsIsoHandler(str(tools_path), log_callback, progress_callback)
+                if "ISO > WBFS" in self.operation:
+                    self.handler.direction = "iso_to_wbfs"
+                elif "WBFS > ISO" in self.operation:
+                    self.handler.direction = "wbfs_to_iso"
             else:
                 raise ValueError(f"Handler non disponible pour: {self.operation}")
 
@@ -479,6 +486,9 @@ class B2PCMainWindow(QMainWindow):
             'Merge BIN/CUE': 'Merge BIN/CUE',
             'GC/WII ISO to RVZ': 'GC/WII ISO to RVZ',
             'WII ISO to WBFS': 'WII ISO to WBFS',
+            'WBFS <> ISO': 'WBFS <> ISO',
+            'ISO > WBFS': 'ISO > WBFS',
+            'WBFS > ISO': 'WBFS > ISO',
             'Compression / Décompression': 'Compression / Decompression',
             'Compression wSquashFS': 'wSquashFS Compression',
             'Décompression wSquashFS': 'wSquashFS Extraction',
@@ -515,6 +525,8 @@ class B2PCMainWindow(QMainWindow):
         self.log_translations_en = {
             "Début de l'opération": "Start of operation",
             "Décrypter ISO PS3": "Decrypt PS3 ISO",
+            "ISO > WBFS": "ISO > WBFS",
+            "WBFS > ISO": "WBFS > ISO",
             "Dossier source": "Source folder",
             "Dossier destination": "Destination folder",
             "Mode conversion réelle activé": "Real conversion mode enabled",
@@ -525,6 +537,7 @@ class B2PCMainWindow(QMainWindow):
             "Erreur critique": "Critical error",
             "Demande d'arrêt envoyée": "Stop request sent",
             "Conversion arrêtée par l'utilisateur": "Conversion stopped by user",
+            "Conversion arretee par l'utilisateur": "Conversion stopped by user",
             "Conversion terminée": "Conversion finished",
             "Conversion terminée avec erreurs": "Conversion finished with errors",
             "Fichier de log créé": "Log file created",
@@ -544,8 +557,10 @@ class B2PCMainWindow(QMainWindow):
             "Outils PS3 detectes": "PS3 tools detected",
             "Traitement de": "Processing",
             "source(s) PS3": "PS3 source(s)",
+            "source(s) WBFS/ISO": "WBFS/ISO source(s)",
             "Trouve": "Found",
             "ISO(s) dans l'archive": "ISO(s) in archive",
+            "fichier(s) ISO/WBFS dans l'archive": "ISO/WBFS file(s) in archive",
             "Recherche de cle dans": "Searching key in",
             "Cle trouvee dans zip": "Key found in zip",
             "Decryptage PS3": "PS3 decryption",
@@ -553,11 +568,25 @@ class B2PCMainWindow(QMainWindow):
             "Extraction ISO PS3": "PS3 ISO extraction",
             " vers:": " to:",
             "Jeu PS3 decrypte et extrait": "PS3 game decrypted and extracted",
+            "Conversion ISO -> WBFS": "ISO -> WBFS conversion",
+            "Conversion WBFS -> ISO": "WBFS -> ISO conversion",
+            "Converti": "Converted",
+            "Sortie detectee": "Detected output",
+            "Aucune sortie detectee automatiquement": "No output auto-detected",
+            "fichier peut deja exister": "file may already exist",
+            "Conversion WBFS/ISO terminee": "WBFS/ISO conversion completed",
+            "Outils WBFS detectes": "WBFS tools detected",
+            "source(s) ISO": "ISO source(s)",
+            "source(s) WBFS": "WBFS source(s)",
+            "Conversion ISO > WBFS terminee": "ISO > WBFS conversion completed",
+            "Conversion WBFS > ISO terminee": "WBFS > ISO conversion completed",
             "Exécution :": "Execution :",
             "Execution completed in": "Execution completed in",
             "Fichier déjà converti": "File already converted",
             "Déjà converti": "Already converted",
             "Échec conversion": "Conversion failed",
+            "Echec conversion": "Conversion failed",
+            "Extraction de l'archive": "Extracting archive",
             "Extension ignorée": "Ignored extension",
             "Sources détectées": "Detected sources",
             "Fichier": "File",
@@ -838,7 +867,7 @@ class B2PCMainWindow(QMainWindow):
                 ("ISO/CUE/GDI > CHD", self.convert_chd_v5, "#22c55e"),                
                 ("Compression wSquashFS", self.compress_wsquashfs, "#eab308"),
                 ("GC/WII ISO to RVZ", self.convert_iso_rvz, "#22c55e"),
-                ("WII ISO to WBFS", None, "#22c55e", True),  # Désactivé
+                ("ISO > WBFS", self.convert_iso_to_wbfs, "#22c55e"),
                 # Bouton PS1 to PSP EBOOT retiré
             ]
         )
@@ -849,7 +878,8 @@ class B2PCMainWindow(QMainWindow):
             "Décompression",
             [
                 ("Extraire CHD", self.extract_chd, "#22c55e"),
-                ("Décompression wSquashFS", self.extract_wsquashfs, "#eab308")
+                ("Décompression wSquashFS", self.extract_wsquashfs, "#eab308"),
+                ("WBFS > ISO", self.convert_wbfs_to_iso, "#22c55e"),
             ]
         )
         self.button_groups.append(compress_group)
@@ -1263,6 +1293,16 @@ class B2PCMainWindow(QMainWindow):
 
     def decrypt_ps3_iso(self):
         self.show_conversion_dialog("Décrypter ISO PS3")
+
+    def convert_iso_to_wbfs(self):
+        self.show_conversion_dialog("ISO > WBFS")
+
+    def convert_wbfs_to_iso(self):
+        self.show_conversion_dialog("WBFS > ISO")
+
+    # Compatibilite eventuelle avec d'anciens liens UI
+    def convert_wbfs_iso(self):
+        self.show_conversion_dialog("WBFS > ISO")
 
     # ------------------ CHD INFO FEATURE ------------------
     def show_chd_info(self):

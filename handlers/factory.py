@@ -3,6 +3,7 @@ from .rvz import RvzHandler
 from .xbox_patch import XboxPatchHandler
 from .squashfs import SquashFSHandler
 from .ps3 import Ps3DecryptHandler
+from .wbfs_iso import WbfsIsoHandler
 
 def create_handler(handler_type: str, tools_path, log_callback, progress_callback):
     handlers = {
@@ -10,7 +11,8 @@ def create_handler(handler_type: str, tools_path, log_callback, progress_callbac
         "rvz": RvzHandler,
         "xbox_patch": XboxPatchHandler,
         "squashfs": SquashFSHandler,
-        "ps3_decrypt": Ps3DecryptHandler
+        "ps3_decrypt": Ps3DecryptHandler,
+        "wbfs_iso": WbfsIsoHandler,
     }
     if handler_type not in handlers:
         raise ValueError(f"Handler type '{handler_type}' not supported")

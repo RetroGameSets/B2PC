@@ -15,6 +15,7 @@ Discord: https://discord.gg/Vph9jwg3VV
 - ISO / CUE → CHD (auto CD / DVD detection)
 - CHD extraction → BIN/CUE (CD) or ISO (DVD)
 - GameCube / Wii ISO → RVZ conversion
+- WBFS ↔ ISO conversion (both directions)
 - wSquashFS compression / extraction
 - Xbox ISO patch (xISO for xemu)
 - PS3 ISO decryption + extraction to .ps3 folder
@@ -24,7 +25,7 @@ Discord: https://discord.gg/Vph9jwg3VV
 - English / French UI
 
 ## 🧩 Required external tools (`ressources/` folder)
-`chdman.exe`, `dolphin-tool.exe`, `gensquashfs.exe`, `unsquashfs.exe`, `xiso.exe`, `ps3dec_win.exe`.
+`chdman.exe`, `dolphin-tool.exe`, `gensquashfs.exe`, `unsquashfs.exe`, `xiso.exe`, `wbfs_file.exe`, `ps3dec_win.exe`.
 
 ## 🚀 Download latest Windows build
 https://github.com/RetroGameSets/B2PC/releases/latest
