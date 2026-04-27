@@ -16,7 +16,7 @@ Discord: https://discord.gg/Vph9jwg3VV
 - Extraction CHD → BIN/CUE (CD) ou ISO (DVD)
 - Conversion GameCube / Wii ISO → RVZ
 - Conversion WBFS ↔ ISO (dans les 2 sens)
-- Compression / Décompression wSquashFS
+- Compression / wSquashFS Extraction pour Windows (.pc) et PS3 (.ps3)
 - Patch ISO Xbox (xISO pour xemu)
 - Décryptage ISO PS3 + extraction en dossier .ps3
 - Gestion des archives (ZIP / RAR / 7Z)

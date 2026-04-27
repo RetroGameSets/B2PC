@@ -1,4 +1,4 @@
-APP_VERSION = "3.6.3.3"
+APP_VERSION = "3.6.4.0"
 UPDATE_URL = "https://raw.githubusercontent.com/RetroGameSets/B2PC/refs/heads/main/ressources/last_version.json"
 
 import os
@@ -140,14 +140,13 @@ class WorkerThread(QThread):
         self.log_message.emit(message)
 
     def run(self):
-        """Exécute la conversion (mode réel uniquement)"""
+        """Exécute la conversion"""
         try:
             self.log_both(f"🚀 Début de l'opération : {self.operation}")
             self.log_both(f"📁 Dossier source: {self.source_folder}")
             self.log_both(f"📁 Dossier destination: {self.dest_folder}")
             
-            # Conversion réelle obligatoire
-            self.log_both("⚡ Mode conversion réelle activé")
+           
             results = self.run_conversion()
 
             error_count = 0
@@ -195,19 +194,25 @@ class WorkerThread(QThread):
                 self.handler = ExtractChdHandler(str(tools_path), log_callback, progress_callback)
             elif "Merge BIN/CUE" in self.operation:
                 self.handler = MergeBinCueHandler(str(tools_path), log_callback, progress_callback)
-            elif "RVZ" in self.operation:
+            elif "RVZ" in self.operation and "WBFS" not in self.operation:
                 self.handler = RvzHandler(str(tools_path), log_callback, progress_callback)
+                if "[GC/WII] RVZ > ISO" in self.operation:
+                    self.handler.direction = "rvz_to_iso"
+                else:
+                    self.handler.direction = "iso_to_rvz"
             elif "wSquashFS" in self.operation:
                 self.handler = SquashFSHandler(str(tools_path), log_callback, progress_callback)
             elif "Xbox" in self.operation:
                 self.handler = XboxPatchHandler(str(tools_path), log_callback, progress_callback)
             elif "PS3" in self.operation:
                 self.handler = Ps3DecryptHandler(str(tools_path), log_callback, progress_callback)
-            elif any(k in self.operation for k in ("ISO > WBFS", "WBFS > ISO", "WBFS <> ISO")):
+            elif any(k in self.operation for k in ("[WII] ISO > WBFS", "[WII] WBFS > ISO", "[WII] WBFS > RVZ", "[WII] WBFS <> ISO")):
                 self.handler = WbfsIsoHandler(str(tools_path), log_callback, progress_callback)
-                if "ISO > WBFS" in self.operation:
+                if "[WII] ISO > WBFS" in self.operation:
                     self.handler.direction = "iso_to_wbfs"
-                elif "WBFS > ISO" in self.operation:
+                elif "[WII] WBFS > RVZ" in self.operation:
+                    self.handler.direction = "wbfs_to_rvz"
+                elif "[WII] WBFS > ISO" in self.operation:
                     self.handler.direction = "wbfs_to_iso"
             else:
                 raise ValueError(f"Handler non disponible pour: {self.operation}")
@@ -484,19 +489,21 @@ class B2PCMainWindow(QMainWindow):
             'ISO/CUE/GDI > CHD DVD': 'ISO/CUE/GDI > CHD DVD',
             'Extraire CHD': 'Extract CHD',
             'Merge BIN/CUE': 'Merge BIN/CUE',
-            'GC/WII ISO to RVZ': 'GC/WII ISO to RVZ',
-            'WII ISO to WBFS': 'WII ISO to WBFS',
-            'WBFS <> ISO': 'WBFS <> ISO',
-            'ISO > WBFS': 'ISO > WBFS',
-            'WBFS > ISO': 'WBFS > ISO',
+            '[GC/WII] ISO > RVZ': '[GC/WII] ISO > RVZ',
+            '[GC/WII] RVZ > ISO': '[GC/WII] RVZ > ISO',
+            '[WII] [WII] ISO > WBFS': '[WII] [WII] ISO > WBFS',
+            '[WII] WBFS <> ISO': '[WII] WBFS <> ISO',
+            '[WII] ISO > WBFS': '[WII] ISO > WBFS',
+            '[WII] WBFS > ISO': '[WII] WBFS > ISO',
+            '[WII] WBFS > RVZ': '[WII] WBFS > RVZ',
             'Compression / Décompression': 'Compression / Decompression',
-            'Compression wSquashFS': 'wSquashFS Compression',
-            'Décompression wSquashFS': 'wSquashFS Extraction',
+            'wSquashFS Compression': 'wSquashFS Compression',
+            'wSquashFS Extraction': 'wSquashFS Extraction',
             'Compression': 'Compress',
             'Décompression': 'Decompression',
             'Outils': 'Tools',
-            'Patch Xbox ISO': 'Patch Xbox ISO',
-            'Décrypter ISO PS3': 'Decrypt PS3 ISO',
+            '[XBOX] Patch ISO': '[XBOX] Patch ISO',
+            '[PS3] Decrypt ISO & Convert': '[PS3] Decrypt ISO & Convert',
             'Eteindre la lumière 🌙': 'Enable dark mode 🌙',
             'Allumer la lumière ☀️': 'Disable dark mode ☀️',
             '🛑 Arrêter': '🛑 Stop',
@@ -510,9 +517,9 @@ class B2PCMainWindow(QMainWindow):
             'Extract CHD': 'Extract CHD',
             'Merge BIN/CUE': 'Merge BIN/CUE',
             'Conversion ISO vers RVZ': 'ISO to RVZ Conversion',
-            'Décompression wSquashFS': 'wSquashFS Extraction',
-            'Patch Xbox ISO': 'Patch Xbox ISO',
-            'Décrypter ISO PS3': 'Decrypt PS3 ISO',
+            'wSquashFS Extraction': 'wSquashFS Extraction',
+            '[XBOX] Patch ISO': '[XBOX] Patch ISO',
+            '[PS3] Decrypt ISO & Convert': '[PS3] Decrypt ISO & Convert',
             'Infos CHD': 'CHD Info',
             'Analyse CHD': 'CHD Analysis',
             'Taille originale': 'Original size',
@@ -524,12 +531,12 @@ class B2PCMainWindow(QMainWindow):
         # Fragments de traduction pour les messages de log (FR -> EN)
         self.log_translations_en = {
             "Début de l'opération": "Start of operation",
-            "Décrypter ISO PS3": "Decrypt PS3 ISO",
-            "ISO > WBFS": "ISO > WBFS",
-            "WBFS > ISO": "WBFS > ISO",
+            "[PS3] Decrypt ISO & Convert": "[PS3] Decrypt ISO & Convert",
+            "[WII] ISO > WBFS": "[WII] ISO > WBFS",
+            "[WII] WBFS > ISO": "[WII] WBFS > ISO",
+            "[WII] WBFS > RVZ": "[WII] WBFS > RVZ",
             "Dossier source": "Source folder",
             "Dossier destination": "Destination folder",
-            "Mode conversion réelle activé": "Real conversion mode enabled",
             "Opération terminée avec succès": "Operation completed successfully",
             "Opération terminée avec erreur": "Operation finished with error",
             "Opération terminée avec": "Operation finished with",
@@ -579,12 +586,28 @@ class B2PCMainWindow(QMainWindow):
             "source(s) ISO": "ISO source(s)",
             "source(s) ISO/RVZ": "ISO/RVZ source(s)",
             "source(s) WBFS": "WBFS source(s)",
-            "Conversion ISO > WBFS terminee": "ISO > WBFS conversion completed",
-            "Conversion WBFS > ISO terminee": "WBFS > ISO conversion completed",
+            "Conversion [WII] ISO > WBFS terminee": "[WII] ISO > WBFS conversion completed",
+            "Conversion [WII] WBFS > ISO terminee": "[WII] WBFS > ISO conversion completed",
+            "Conversion [WII] WBFS > RVZ terminee": "[WII] WBFS > RVZ conversion completed",
             "Conversion intermediaire RVZ -> ISO": "Intermediate RVZ -> ISO conversion",
             "Echec conversion RVZ -> ISO": "RVZ -> ISO conversion failed",
+            "Echec conversion ISO -> RVZ": "ISO -> RVZ conversion failed",
             "ISO intermediaire introuvable": "Intermediate ISO not found",
+            "Sortie ISO introuvable pour conversion RVZ": "ISO output not found for RVZ conversion",
+            "ISO intermediaire supprime": "Intermediate ISO deleted",
             "Fichier ignore: ce n'est pas un ISO Wii (GameCube ou format non supporte)": "File skipped: this is not a Wii ISO (GameCube or unsupported format)",
+            "Dossier ignoré (suffixe non supporté)": "Ignored folder (unsupported suffix)",
+            "Archive ignorée en wSquashFS Compression": "Archive ignored in wSquashFS compression",
+            "Aucun dossier .pc/.ps3 trouvé pour la compression": "No .pc/.ps3 folder found for compression",
+            "Dossiers .pc/.ps3 détectés": ".pc/.ps3 folders detected",
+            "Fichiers .wsquashfs/.squashfs détectés": ".wsquashfs/.squashfs files detected",
+            "Aucun fichier .wsquashfs/.squashfs ni dossier .pc/.ps3 trouvé": "No .wsquashfs/.squashfs file or .pc/.ps3 folder found",
+            "Sortie deplacee depuis TEMP": "Output moved from TEMP",
+            "Sortie introuvable dans TEMP apres conversion": "Output not found in TEMP after conversion",
+            "Echec deplacement sortie depuis TEMP": "Failed moving output from TEMP",
+            "Sortie ISO deplacee vers destination": "ISO output moved to destination",
+            "Sortie ISO introuvable apres conversion": "ISO output not found after conversion",
+            "Echec deplacement sortie ISO vers destination": "Failed moving ISO output to destination",
             "Exécution :": "Execution :",
             "Execution completed in": "Execution completed in",
             "Fichier déjà converti": "File already converted",
@@ -601,6 +624,7 @@ class B2PCMainWindow(QMainWindow):
             "Erreur sauvegarde": "Save error",
             "Dossier temporaire créé": "Temporary folder created",
             "Dossier temporaire nettoyé": "Temporary folder cleaned",
+            "Dossier TEMP supprimé": "TEMP folder deleted",
             "Erreur nettoyage dossier temporaire": "Temp folder cleanup error",
             "Type détecté": "Detected type",
             "Déjà extrait": "Already extracted",
@@ -870,10 +894,10 @@ class B2PCMainWindow(QMainWindow):
             "Compression",
             [
                 ("ISO/CUE/GDI > CHD", self.convert_chd_v5, "#22c55e"),                
-                ("Compression wSquashFS", self.compress_wsquashfs, "#eab308"),
-                ("GC/WII ISO to RVZ", self.convert_iso_rvz, "#22c55e"),
-                ("WII ISO/RVZ > WBFS", self.convert_iso_to_wbfs, "#22c55e"),
-                # Bouton PS1 to PSP EBOOT retiré
+                ("wSquashFS Compression", self.compress_wsquashfs, "#eab308"),
+                ("[GC/WII] ISO > RVZ", self.convert_iso_rvz, "#22c55e"),
+                ("[WII] ISO/RVZ > WBFS", self.convert_iso_to_wbfs, "#22c55e"),                
+                ("[WII] WBFS > RVZ", self.convert_wbfs_to_rvz, "#22c55e"),
             ]
         )
         self.button_groups.append(conv_group)
@@ -883,8 +907,9 @@ class B2PCMainWindow(QMainWindow):
             "Décompression",
             [
                 ("Extraire CHD", self.extract_chd, "#22c55e"),
-                ("Décompression wSquashFS", self.extract_wsquashfs, "#eab308"),
-                ("WBFS > ISO", self.convert_wbfs_to_iso, "#22c55e"),
+                ("wSquashFS Extraction", self.extract_wsquashfs, "#eab308"),
+                ("[GC/WII] RVZ > ISO", self.convert_rvz_to_iso, "#22c55e"),
+                ("[WII] WBFS > ISO", self.convert_wbfs_to_iso, "#22c55e"),
             ]
         )
         self.button_groups.append(compress_group)
@@ -894,9 +919,9 @@ class B2PCMainWindow(QMainWindow):
             "Outils",
             [
                 ("Infos CHD", self.show_chd_info, "#a855f7"),
-                ("Patch Xbox ISO", self.patch_xbox_iso, "#a855f7"),
+                ("[XBOX] Patch ISO", self.patch_xbox_iso, "#a855f7"),
                 ("Merge BIN/CUE", self.merge_bin_cue, "#22c55e"),
-                ("Décrypter ISO PS3", self.decrypt_ps3_iso, "#a855f7")
+                ("[PS3] Decrypt ISO & Convert", self.decrypt_ps3_iso, "#a855f7")
             ]
         )
         self.button_groups.append(tools_group)
@@ -1286,28 +1311,34 @@ class B2PCMainWindow(QMainWindow):
     
     def convert_iso_rvz(self):
         self.show_conversion_dialog("Conversion ISO vers RVZ")
+
+    def convert_rvz_to_iso(self):
+        self.show_conversion_dialog("[GC/WII] RVZ > ISO")
     
     def compress_wsquashfs(self):
-        self.show_conversion_dialog("Compression wSquashFS")
+        self.show_conversion_dialog("wSquashFS Compression")
     
     def extract_wsquashfs(self):
-        self.show_conversion_dialog("Décompression wSquashFS")
+        self.show_conversion_dialog("wSquashFS Extraction")
     
     def patch_xbox_iso(self):
-        self.show_conversion_dialog("Patch Xbox ISO")
+        self.show_conversion_dialog("[XBOX] Patch ISO")
 
     def decrypt_ps3_iso(self):
-        self.show_conversion_dialog("Décrypter ISO PS3")
+        self.show_conversion_dialog("[PS3] Decrypt ISO & Convert")
 
     def convert_iso_to_wbfs(self):
-        self.show_conversion_dialog("ISO > WBFS")
+        self.show_conversion_dialog("[WII] ISO > WBFS")
 
     def convert_wbfs_to_iso(self):
-        self.show_conversion_dialog("WBFS > ISO")
+        self.show_conversion_dialog("[WII] WBFS > ISO")
+
+    def convert_wbfs_to_rvz(self):
+        self.show_conversion_dialog("[WII] WBFS > RVZ")
 
     # Compatibilite eventuelle avec d'anciens liens UI
     def convert_wbfs_iso(self):
-        self.show_conversion_dialog("WBFS > ISO")
+        self.show_conversion_dialog("[WII] WBFS > ISO")
 
     # ------------------ CHD INFO FEATURE ------------------
     def show_chd_info(self):

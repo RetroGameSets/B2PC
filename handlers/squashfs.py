@@ -2,30 +2,52 @@ from .base import ConversionHandler
 from pathlib import Path
 
 class SquashFSHandler(ConversionHandler):
-    """Handler pour compression/décompression wSquashFS"""
+    """Handler pour compression/wSquashFS Extraction"""
+
+    def _is_supported_wsquashfs_folder(self, folder: Path) -> bool:
+        name = folder.name.lower()
+        return name.endswith(".pc") or name.endswith(".ps3")
+
+    def _get_output_extension_for_folder(self, folder: Path) -> str:
+        if folder.name.lower().endswith(".ps3"):
+            return ".squashfs"
+        return ".wsquashfs"
+
     def get_all_source_files(self, source_path: str = "") -> list:
         if not source_path:
             source_path = self.source_folder
         source_dir = Path(source_path)
         source_files = []
         for item in source_dir.iterdir():
-            if item.is_dir():
+            if item.is_dir() and self._is_supported_wsquashfs_folder(item):
                 source_files.append(str(item))
         return source_files
+
     def compress(self) -> dict:
         dest_path = Path(self.dest_folder)
         dest_path.mkdir(exist_ok=True)
         try:
             source_path = Path(self.source_folder)
-            archives = self.detect_archives(source_path) # type: ignore[attr-defined]
             items_to_compress = []
             for item in source_path.iterdir():
                 if item.is_dir():
-                    items_to_compress.append((item, None, "folder"))
-                    self.log(f"📁 Dossier trouvé: {item.name}")
-            for archive in archives:
-                items_to_compress.append((archive, "archive", "archive"))
-                self.log(f"📦 Archive trouvée: {archive.name}")
+                    if self._is_supported_wsquashfs_folder(item):
+                        items_to_compress.append((item, None, "folder"))
+                        self.log(f"📁 Dossier trouvé: {item.name}")
+                    else:
+                        self.log(f"⏭️ Dossier ignoré (suffixe non supporté): {item.name}")
+                elif item.is_file() and item.suffix.lower() in {".zip", ".rar", ".7z"}:
+                    self.log(f"⏭️ Archive ignorée en wSquashFS Compression: {item.name}")
+
+            if not items_to_compress:
+                self.log("⚠️ Aucun dossier .pc/.ps3 trouvé pour la compression")
+                return {
+                    "converted_games": 0,
+                    "error_count": 0,
+                    "total_files": 0,
+                    "stopped": self.should_stop
+                }
+
             self.log(f"📦 Compression de {len(items_to_compress)} éléments")
             compressed = 0
             errors = 0
@@ -37,26 +59,12 @@ class SquashFSHandler(ConversionHandler):
                 self.progress((i / len(items_to_compress)) * 100, f"Compression {i+1}/{len(items_to_compress)}")
                 if item_type == "folder":
                     self.log(f"📁 Compression dossier: {source_item.name}")
-                    squashfs_file = dest_path / f"{source_item.name}.wsquashfs"
+                    output_ext = self._get_output_extension_for_folder(source_item)
+                    squashfs_file = dest_path / f"{source_item.name}{output_ext}"
                     if self._compress_folder(source_item, squashfs_file):
                         compressed += 1
                     else:
                         errors += 1
-                elif item_type == "archive":
-                    self.log(f"📦 Extraction puis compression de l'archive: {source_item.name}")
-                    try:
-                        extracted_folder = self.extract_single_archive(source_item)
-                        for extracted_item in extracted_folder.iterdir():
-                            if extracted_item.is_dir():
-                                squashfs_file = dest_path / f"{extracted_item.name}.wsquashfs"
-                                if self._compress_folder(extracted_item, squashfs_file):
-                                    compressed += 1
-                                else:
-                                    errors += 1
-                    except Exception as e:
-                        self.log(f"❌ Échec extraction archive {source_item.name}: {str(e)}")
-                        errors += 1
-                        continue
             if self.should_stop:
                 self.log("🛑 Compression arrêtée par l'utilisateur")
             return {
@@ -94,7 +102,7 @@ class SquashFSHandler(ConversionHandler):
         dest_path = Path(self.dest_folder)
         dest_path.mkdir(exist_ok=True)
         try:
-            source_files = self.get_all_source_files_extract(".wsquashfs")
+            source_files = self.get_all_source_files_extract([".wsquashfs", ".squashfs"])
             self.log(f"📂 Traitement de {len(source_files)} sources SquashFS")
             extracted = 0
             errors = 0
@@ -111,7 +119,10 @@ class SquashFSHandler(ConversionHandler):
                     self.log(f"📦 Extraction de l'archive: {source_item.name}")
                     try:
                         extracted_folder = self.extract_single_archive(source_item)
-                        squashfs_files = [p for p in extracted_folder.iterdir() if p.is_file() and p.suffix.lower()==".wsquashfs"]
+                        squashfs_files = [
+                            p for p in extracted_folder.iterdir()
+                            if p.is_file() and p.suffix.lower() in {".wsquashfs", ".squashfs"}
+                        ]
                         self.log(f"📁 Trouvé {len(squashfs_files)} fichiers SquashFS dans l'archive")
                     except Exception as e:
                         self.log(f"❌ Échec extraction archive {source_item.name}: {str(e)}")
@@ -150,10 +161,14 @@ class SquashFSHandler(ConversionHandler):
             }
         finally:
             self.cleanup_temp_folder()
-    def get_all_source_files_extract(self, file_extension: str) -> list:
+    def get_all_source_files_extract(self, file_extensions: list) -> list:
         source_path = Path(self.source_folder)
         files_list = []
-        direct_files = [p for p in source_path.iterdir() if p.is_file() and p.suffix.lower() == file_extension.lower()]
+        normalized_extensions = {ext.lower() for ext in file_extensions}
+        direct_files = [
+            p for p in source_path.iterdir()
+            if p.is_file() and p.suffix.lower() in normalized_extensions
+        ]
         for file_path in direct_files:
             files_list.append((str(file_path), None))
         archives = self.detect_archives(source_path)
@@ -162,16 +177,19 @@ class SquashFSHandler(ConversionHandler):
         return files_list
     def convert(self) -> dict:
         source_path = Path(self.source_folder)
-        wsquashfs_files = [p for p in source_path.iterdir() if p.is_file() and p.suffix.lower() == ".wsquashfs"]
-        directories = [item for item in source_path.iterdir() if item.is_dir()]
-        if wsquashfs_files:
-            self.log("🔍 Fichiers .wsquashfs détectés → Mode extraction")
+        squashfs_files = [
+            p for p in source_path.iterdir()
+            if p.is_file() and p.suffix.lower() in {".wsquashfs", ".squashfs"}
+        ]
+        directories = [item for item in source_path.iterdir() if item.is_dir() and self._is_supported_wsquashfs_folder(item)]
+        if squashfs_files:
+            self.log("🔍 Fichiers .wsquashfs/.squashfs détectés → Mode extraction")
             return self.extract()
         elif directories:
-            self.log("📁 Dossiers détectés → Mode compression")
+            self.log("📁 Dossiers .pc/.ps3 détectés → Mode compression")
             return self.compress()
         else:
-            self.log("⚠️ Aucun fichier .wsquashfs ou dossier trouvé")
+            self.log("⚠️ Aucun fichier .wsquashfs/.squashfs ni dossier .pc/.ps3 trouvé")
             return {
                 "converted_games": 0,
                 "error_count": 0,

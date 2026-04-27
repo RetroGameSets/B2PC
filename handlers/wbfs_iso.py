@@ -26,6 +26,12 @@ class WbfsIsoHandler(ConversionHandler):
             self.log("❌ Outil manquant : wbfs_file.exe")
             return False
 
+        if self.direction == "wbfs_to_rvz":
+            dolphin_tool = Path(resource_path("ressources/dolphin-tool.exe"))
+            if not dolphin_tool.exists():
+                self.log("❌ Outil manquant : dolphin-tool.exe")
+                return False
+
         self.log("✅ Outils WBFS detectes")
         return True
 
@@ -102,26 +108,41 @@ class WbfsIsoHandler(ConversionHandler):
     def _allowed_extensions(self) -> Tuple[str, ...]:
         if self.direction == "iso_to_wbfs":
             return (".iso", ".rvz")
+        if self.direction == "wbfs_to_rvz":
+            return (".wbfs",)
         if self.direction == "wbfs_to_iso":
             return (".wbfs",)
         return self.SUPPORTED_EXTENSIONS
 
-    def _ensure_work_folder(self) -> Path:
-        if not self.temp_extract_folder:
-            self.temp_extract_folder = Path(tempfile.mkdtemp(prefix="B2PC_wbfs_"))
-            self.log(f"📂 Dossier temporaire cree: {self.temp_extract_folder}")
+    def _ensure_temp_extract_folder(self, dest_path: Path) -> Path:
+        if self.temp_extract_folder and self.temp_extract_folder.exists():
+            return self.temp_extract_folder
 
+        temp_root = dest_path / "TEMP"
+        temp_root.mkdir(parents=True, exist_ok=True)
+
+        self.temp_extract_folder = Path(
+            tempfile.mkdtemp(prefix="B2PC_wbfs_", dir=str(temp_root))
+        )
+        self.log(f"📂 Dossier temporaire cree: {self.temp_extract_folder}")
+        return self.temp_extract_folder
+
+    def _ensure_work_folder(self, dest_path: Path) -> Path:
+        if not self.temp_extract_folder:
+            self._ensure_temp_extract_folder(dest_path)
+
+        # mypy: self.temp_extract_folder is guaranteed here
         work_folder = self.temp_extract_folder / "work"
         work_folder.mkdir(parents=True, exist_ok=True)
         return work_folder
 
-    def _prepare_input_for_wbfs(self, input_file: Path) -> Tuple[bool, Path]:
+    def _prepare_input_for_wbfs(self, input_file: Path, dest_path: Path) -> Tuple[bool, Path]:
         if input_file.suffix.lower() != ".rvz":
             return True, input_file
 
         self.log(f"🔄 Conversion intermediaire RVZ -> ISO: {input_file.name}")
 
-        work_folder = self._ensure_work_folder()
+        work_folder = self._ensure_work_folder(dest_path)
         temp_iso = work_folder / f"{input_file.stem}.iso"
 
         try:
@@ -150,34 +171,12 @@ class WbfsIsoHandler(ConversionHandler):
 
         return True, temp_iso
 
-    def _iter_files_depth_one(self, root: Path, extensions: Tuple[str, ...]) -> List[Path]:
-        files: List[Path] = []
-        if not root.exists() or not root.is_dir():
-            return files
-
-        ext_set = set(ext.lower() for ext in extensions)
-
-        # Root level
-        for p in root.iterdir():
-            if p.is_file() and p.suffix.lower() in ext_set:
-                files.append(p)
-
-        # One subfolder level
-        for child in root.iterdir():
-            if not child.is_dir():
-                continue
-            for p in child.iterdir():
-                if p.is_file() and p.suffix.lower() in ext_set:
-                    files.append(p)
-
-        return files
-
     def _snapshot_outputs(self, folder: Path) -> Dict[str, Tuple[int, float]]:
         snapshot: Dict[str, Tuple[int, float]] = {}
         for p in folder.iterdir():
             if not p.is_file():
                 continue
-            if p.suffix.lower() not in (".iso", ".wbfs", ".txt"):
+            if p.suffix.lower() not in (".iso", ".wbfs", ".rvz", ".txt"):
                 continue
             stat = p.stat()
             snapshot[p.name] = (int(stat.st_size), float(stat.st_mtime))
@@ -194,12 +193,23 @@ class WbfsIsoHandler(ConversionHandler):
                 changes.append(name)
         return sorted(changes)
 
-    def _snapshot_local_outputs(self, root: Path) -> Dict[str, Tuple[int, float]]:
+    def _is_under_temp_workspace(self, path: Path) -> bool:
+        if not self.temp_extract_folder:
+            return False
+        try:
+            path.resolve().relative_to(self.temp_extract_folder.resolve())
+            return True
+        except Exception:
+            return False
+
+    def _snapshot_generated_files(self, root: Path, extension: str) -> Dict[str, Tuple[int, float]]:
         snapshot: Dict[str, Tuple[int, float]] = {}
         if not root.exists() or not root.is_dir():
             return snapshot
 
-        for p in self._iter_files_depth_one(root, (".wbfs", ".iso", ".txt")):
+        for p in root.rglob(f"*{extension}"):
+            if not p.is_file():
+                continue
             try:
                 rel = str(p.relative_to(root))
                 stat = p.stat()
@@ -208,101 +218,169 @@ class WbfsIsoHandler(ConversionHandler):
                 continue
         return snapshot
 
-    def _cleanup_generated_wbfs_folder(self, generated_folder: Path, input_file: Path, dest_path: Path):
-        """Remove converter-generated folder when safe after WBFS move."""
-        try:
-            folder = generated_folder.resolve()
-            source_parent = input_file.parent.resolve()
-            destination = dest_path.resolve()
-        except Exception:
-            return
-
-        # Only clean a direct child folder near source, never destination or source root.
-        if folder == source_parent or folder == destination or folder.parent != source_parent:
-            return
-
-        # Keep safety guard: expected pattern "Title [GAMEID]".
-        expected_prefix = f"{input_file.stem} [".lower()
-        if not folder.name.lower().startswith(expected_prefix):
-            return
-
-        try:
-            # Remove auxiliary info files left by wbfs_file.
-            for child in list(folder.iterdir()):
-                if child.is_file() and child.suffix.lower() == ".txt":
-                    child.unlink()
-
-            if not any(folder.iterdir()):
-                folder.rmdir()
-                self.log(f"🧹 Dossier genere supprime: {folder.name}")
-        except Exception:
-            # Keep non-empty or protected folders untouched.
-            pass
-
-    def _find_created_or_updated_files(
+    def _move_generated_from_temp(
         self,
-        root: Path,
+        temp_root: Path,
         before: Dict[str, Tuple[int, float]],
         after: Dict[str, Tuple[int, float]],
-        extension: str,
-    ) -> List[Path]:
-        results: List[Path] = []
-        for rel, meta in after.items():
-            if not rel.endswith(extension):
-                continue
-            if rel not in before or before[rel] != meta:
-                results.append(root / rel)
-
-        # Plus recent en premier
-        results.sort(key=lambda p: p.stat().st_mtime if p.exists() else 0.0, reverse=True)
-        return results
-
-    def _compute_target_wbfs_name(self, input_file: Path, source_wbfs: Path, dest_path: Path) -> str:
-        generated_parent = source_wbfs.parent
-
-        # Preferred naming: folder created by wbfs_file, e.g. "Game Title [GAMEID]".
-        if generated_parent != input_file.parent and generated_parent != dest_path:
-            folder_name = generated_parent.name.strip()
-            if folder_name and not folder_name.lower().startswith("extracted_"):
-                return f"{folder_name}.wbfs"
-
-        return f"{input_file.stem}.wbfs"
-
-    def _relocate_wbfs_output(
-        self,
-        input_file: Path,
         dest_path: Path,
-        source_before: Dict[str, Tuple[int, float]],
-        source_after: Dict[str, Tuple[int, float]],
-    ) -> Optional[str]:
-        candidates = self._find_created_or_updated_files(
+    ) -> List[str]:
+        moved: List[str] = []
+
+        for rel, meta in after.items():
+            if rel in before and before[rel] == meta:
+                continue
+
+            src = temp_root / rel
+            dst = dest_path / rel
+
+            try:
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                if dst.exists():
+                    dst.unlink()
+                shutil.move(str(src), str(dst))
+                moved.append(rel.replace("\\", "/"))
+            except Exception as e:
+                self.log(f"❌ Echec deplacement sortie depuis TEMP: {e}")
+
+        if moved:
+            self.log(f"📦 Sortie deplacee depuis TEMP: {len(moved)} fichier(s)")
+
+        return sorted(moved)
+
+    def _cleanup_empty_parent_folders(self, start_folder: Path, stop_folder: Path):
+        """Try to delete empty folders from start_folder up to (but excluding) stop_folder."""
+        current = start_folder
+        while True:
+            if current == stop_folder:
+                break
+            try:
+                current.rmdir()
+            except Exception:
+                break
+            parent = current.parent
+            if parent == current:
+                break
+            current = parent
+
+    def _move_generated_iso_to_destination(
+        self,
+        source_root: Path,
+        before: Dict[str, Tuple[int, float]],
+        after: Dict[str, Tuple[int, float]],
+        dest_path: Path,
+    ) -> List[str]:
+        moved: List[str] = []
+
+        for rel, meta in after.items():
+            if rel in before and before[rel] == meta:
+                continue
+
+            src = source_root / rel
+            if src.parent != source_root:
+                dst_name = f"{src.parent.name}.iso"
+            else:
+                dst_name = src.name
+            dst = dest_path / dst_name
+
+            try:
+                src_resolved = src.resolve()
+                dst_resolved = dst.resolve()
+                if src_resolved == dst_resolved:
+                    moved.append(dst.name)
+                    continue
+            except Exception:
+                pass
+
+            try:
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                if dst.exists():
+                    dst.unlink()
+                shutil.move(str(src), str(dst))
+                moved.append(dst.name)
+                self._cleanup_empty_parent_folders(src.parent, source_root)
+            except Exception as e:
+                self.log(f"❌ Echec deplacement sortie ISO vers destination: {e}")
+
+        if moved:
+            self.log(f"📦 Sortie ISO deplacee vers destination: {len(moved)} fichier(s)")
+
+        return sorted(set(moved))
+
+    def _convert_iso_to_rvz(self, iso_file: Path, dest_path: Path) -> Tuple[bool, Optional[str]]:
+        rvz_file = dest_path / f"{iso_file.stem}.rvz"
+        if rvz_file.exists():
+            self.log(f"⏭️ RVZ deja existant : {rvz_file.name}")
+            return True, rvz_file.name
+
+        args = [
+            "convert",
+            "-f", "rvz",
+            "-c", "zstd",
+            "-l", "5",
+            "-b", "131072",
+            "-i", str(iso_file),
+            "-o", str(rvz_file),
+        ]
+        if self.run_tool("dolphin-tool.exe", args, show_output=True):
+            self.log(f"🐬 Converti en RVZ : {iso_file.name}")
+            return True, rvz_file.name
+
+        self.log(f"❌ Echec conversion ISO -> RVZ: {iso_file.name}")
+        return False, None
+
+    def _convert_wbfs_to_rvz_one(self, input_file: Path, dest_path: Path) -> Tuple[bool, List[str]]:
+        before = self._snapshot_outputs(dest_path)
+
+        temp_before = self._snapshot_generated_files(input_file.parent, ".iso")
+        ok = self.run_tool("wbfs_file.exe", [str(input_file)], cwd=str(dest_path), show_output=True)
+        if not ok:
+            return False, []
+
+        temp_after = self._snapshot_generated_files(input_file.parent, ".iso")
+        moved_iso = self._move_generated_iso_to_destination(
             input_file.parent,
-            source_before,
-            source_after,
-            ".wbfs",
+            temp_before,
+            temp_after,
+            dest_path,
         )
-        if not candidates:
-            return None
 
-        source_wbfs = candidates[0]
-        target_name = self._compute_target_wbfs_name(input_file, source_wbfs, dest_path)
-        target_wbfs = dest_path / target_name
+        iso_candidates = [
+            dest_path / name
+            for name in moved_iso
+            if (dest_path / name).exists() and name.lower().endswith(".iso")
+        ]
 
-        try:
-            if target_wbfs.exists():
-                target_wbfs.unlink()
-            shutil.move(str(source_wbfs), str(target_wbfs))
+        if not iso_candidates:
+            self.log("❌ Sortie ISO introuvable pour conversion RVZ")
+            return False, []
 
-            # Try to remove generated source subfolder if it is now empty.
-            self._cleanup_generated_wbfs_folder(source_wbfs.parent, input_file, dest_path)
+        produced_names: List[str] = []
+        for iso_file in iso_candidates:
+            conv_ok, rvz_name = self._convert_iso_to_rvz(iso_file, dest_path)
+            if not conv_ok:
+                return False, []
+            if rvz_name:
+                produced_names.append(rvz_name)
 
-            return target_name
-        except Exception as e:
-            self.log(f"❌ Echec deplacement sortie WBFS: {e}")
-            return None
+            try:
+                iso_file.unlink()
+                self.log(f"🧹 ISO intermediaire supprime: {iso_file.name}")
+            except Exception:
+                pass
+
+        after = self._snapshot_outputs(dest_path)
+        changes = self._detect_output_changes(before, after)
+        for name in produced_names:
+            if name not in changes:
+                changes.append(name)
+        changes.sort()
+        return True, changes
 
     def _convert_one_file(self, input_file: Path, dest_path: Path) -> Tuple[bool, List[str]]:
-        if input_file.suffix.lower() == ".rvz":
+        if self.direction == "wbfs_to_rvz":
+            direction = "WBFS -> ISO -> RVZ"
+        elif input_file.suffix.lower() == ".rvz":
             direction = "RVZ -> ISO -> WBFS"
         elif input_file.suffix.lower() == ".iso":
             direction = "ISO -> WBFS"
@@ -310,35 +388,57 @@ class WbfsIsoHandler(ConversionHandler):
             direction = "WBFS -> ISO"
         self.log(f"🔄 Conversion {direction}: {input_file.name}")
 
-        prepared_ok, prepared_input = self._prepare_input_for_wbfs(input_file)
+        if self.direction == "wbfs_to_rvz":
+            return self._convert_wbfs_to_rvz_one(input_file, dest_path)
+
+        prepared_ok, prepared_input = self._prepare_input_for_wbfs(input_file, dest_path)
         if not prepared_ok:
             return False, []
 
-        source_before = self._snapshot_local_outputs(prepared_input.parent)
+        expected_output_ext = ".wbfs" if prepared_input.suffix.lower() == ".iso" else ".iso"
+        temp_before = self._snapshot_generated_files(prepared_input.parent, expected_output_ext)
+
         before = self._snapshot_outputs(dest_path)
         ok = self.run_tool("wbfs_file.exe", [str(prepared_input)], cwd=str(dest_path), show_output=True)
         if not ok:
             return False, []
 
-        source_after = self._snapshot_local_outputs(prepared_input.parent)
+        temp_after = self._snapshot_generated_files(prepared_input.parent, expected_output_ext)
+        moved_outputs: List[str] = []
 
-        relocated_name: Optional[str] = None
-        if prepared_input.suffix.lower() == ".iso":
-            relocated_name = self._relocate_wbfs_output(
-                prepared_input,
+        if expected_output_ext == ".iso":
+            moved_outputs = self._move_generated_iso_to_destination(
+                prepared_input.parent,
+                temp_before,
+                temp_after,
                 dest_path,
-                source_before,
-                source_after,
             )
-            if not relocated_name:
-                self.log("❌ Fichier WBFS genere introuvable apres conversion")
+            try:
+                parent_is_dest = prepared_input.parent.resolve() == dest_path.resolve()
+            except Exception:
+                parent_is_dest = prepared_input.parent == dest_path
+
+            if not parent_is_dest and not moved_outputs:
+                self.log("❌ Sortie ISO introuvable apres conversion")
+                return False, []
+        elif self._is_under_temp_workspace(prepared_input.parent):
+            moved_outputs = self._move_generated_from_temp(
+                prepared_input.parent,
+                temp_before,
+                temp_after,
+                dest_path,
+            )
+            if not moved_outputs:
+                self.log("❌ Sortie introuvable dans TEMP apres conversion")
                 return False, []
 
         after = self._snapshot_outputs(dest_path)
         changes = self._detect_output_changes(before, after)
-        if relocated_name and relocated_name not in changes:
-            changes.append(relocated_name)
-            changes.sort()
+        for output_name in moved_outputs:
+            leaf_name = Path(output_name).name
+            if leaf_name not in changes:
+                changes.append(leaf_name)
+        changes.sort()
         return True, changes
 
     def convert(self) -> dict:
@@ -349,13 +449,16 @@ class WbfsIsoHandler(ConversionHandler):
             source_files = self._collect_source_items()
 
             if self.direction == "iso_to_wbfs":
-                mode_label = "ISO > WBFS"
+                mode_label = "[WII] ISO > WBFS"
                 source_label = "ISO/RVZ"
+            elif self.direction == "wbfs_to_rvz":
+                mode_label = "[WII] WBFS > RVZ"
+                source_label = "WBFS"
             elif self.direction == "wbfs_to_iso":
-                mode_label = "WBFS > ISO"
+                mode_label = "[WII] WBFS > ISO"
                 source_label = "WBFS"
             else:
-                mode_label = "WBFS <> ISO"
+                mode_label = "[WII] WBFS <> ISO"
                 source_label = "WBFS/ISO"
 
             self.log(f"🎮 Traitement de {len(source_files)} source(s) {source_label}")
@@ -376,6 +479,7 @@ class WbfsIsoHandler(ConversionHandler):
                 elif extract_type == "archive":
                     self.log(f"📦 Extraction de l'archive: {source_item.name}")
                     try:
+                        self._ensure_temp_extract_folder(dest_path)
                         extracted_folder = self.extract_single_archive(source_item)
                         input_files = self._list_convertible_files(extracted_folder)
                         self.log(f"📁 Trouve {len(input_files)} fichier(s) ISO/WBFS dans l'archive")

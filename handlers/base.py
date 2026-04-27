@@ -262,11 +262,30 @@ class ConversionHandler:
         for archive in archives:
             files_list.append((archive, "archive"))
         return files_list
+
+    def _create_temp_workspace(self, prefix: str) -> Path:
+        """Cree un dossier temporaire, de preference sous <destination>/TEMP."""
+        temp_root = None
+        if self.dest_folder:
+            try:
+                dest_path = Path(self.dest_folder)
+                dest_path.mkdir(parents=True, exist_ok=True)
+                temp_root = dest_path / "TEMP"
+                temp_root.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                self.log(f"⚠️ Impossible de preparer TEMP dans la destination: {e}")
+
+        if temp_root:
+            temp_folder = Path(tempfile.mkdtemp(prefix=prefix, dir=str(temp_root)))
+        else:
+            temp_folder = Path(tempfile.mkdtemp(prefix=prefix))
+
+        self.log(f"📂 Dossier temporaire créé: {temp_folder}")
+        return temp_folder
+
     def extract_single_archive(self, archive_path: Path) -> Path:
         if not self.temp_extract_folder:
-            import tempfile
-            self.temp_extract_folder = Path(tempfile.mkdtemp(prefix="B2PC_extract_"))
-            self.log(f"📂 Dossier temporaire créé: {self.temp_extract_folder}")
+            self.temp_extract_folder = self._create_temp_workspace("B2PC_extract_")
         archive_extract_folder = self.temp_extract_folder / f"extracted_{archive_path.stem}"
         if self.extract_archive(archive_path, archive_extract_folder):
             return archive_extract_folder
@@ -278,9 +297,7 @@ class ConversionHandler:
         if not archives:
             self.log("📁 Aucune archive détectée, utilisation directe du dossier source")
             return self.source_folder
-        import tempfile
-        self.temp_extract_folder = Path(tempfile.mkdtemp(prefix="B2PC_extract_"))
-        self.log(f"📂 Dossier temporaire créé: {self.temp_extract_folder}")
+        self.temp_extract_folder = self._create_temp_workspace("B2PC_extract_")
         self.log("📋 Copie des fichiers non-archive...")
         for item in source_path.iterdir():
             if item.is_file() and item.suffix.lower() not in [".zip", ".rar", ".7z"]:
@@ -306,6 +323,11 @@ class ConversionHandler:
             try:
                 shutil.rmtree(self.temp_extract_folder)
                 self.log(f"🧹 Dossier temporaire nettoyé: {self.temp_extract_folder}")
+                temp_root = self.temp_extract_folder.parent
+                if temp_root.name == "TEMP" and temp_root.exists() and not any(temp_root.iterdir()):
+                    temp_root.rmdir()
+                    self.log(f"🧹 Dossier TEMP supprimé: {temp_root}")
+                                
             except Exception as e:
                 self.log(f"⚠️ Erreur nettoyage dossier temporaire: {str(e)}")
             finally:

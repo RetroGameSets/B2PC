@@ -3,7 +3,6 @@ from pathlib import Path
 import os
 import subprocess
 import re
-import tempfile
 import time
 import zipfile
 import shutil
@@ -59,8 +58,7 @@ class Ps3DecryptHandler(ConversionHandler):
 
     def _ensure_temp_folder(self) -> Path:
         if not self.temp_extract_folder:
-            self.temp_extract_folder = Path(tempfile.mkdtemp(prefix="B2PC_ps3_"))
-            self.log(f"📂 Dossier temporaire cree: {self.temp_extract_folder}")
+            self.temp_extract_folder = self._create_temp_workspace("B2PC_ps3_")
         return self.temp_extract_folder
 
     def _candidate_bases(self, iso_file: Path, archive_name: Optional[str]) -> List[str]:
