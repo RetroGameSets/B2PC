@@ -28,6 +28,10 @@ QPushButton {
 QPushButton:hover {
   background-color: #4b5563;
 }
+QPushButton#settingsButton {
+  min-width: 120px;
+  padding: 8px 14px;
+}
 QPushButton:disabled {
   background-color: #d1d5db;
   color: #9ca3af;
@@ -69,6 +73,10 @@ QLabel#buttonGroupTitle {
   font-weight: bold;
   color: #1f2937;
   margin-bottom: 10px;
+}
+QLabel#settingsTitle {
+  font-size: 20px;
+  font-weight: bold;
 }
 QLabel#sourceLabel, QLabel#destLabel {
   font-size: 16px;
@@ -130,4 +138,11 @@ QTextEdit {
   padding: 10px;
   font-family: 'Consolas', monospace;
   color: #1f2937;
+}
+QComboBox QAbstractItemView {
+  background-color: white;
+  color: #1f2937;
+  border: 1px solid #d1d5db;
+  selection-background-color: #e5e7eb;
+  selection-color: #111827;
 }

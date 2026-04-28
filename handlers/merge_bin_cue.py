@@ -37,8 +37,16 @@ class MergeBinCueHandler(ConversionHandler):
         except Exception:
             pass
         # Fusion des résultats
-        return {
+        result = {
             "merged_games": extract_result.get("extracted_games", 0),
             "error_count": extract_result.get("error_count", 0),
             "stopped": extract_handler.should_stop or chd_handler.should_stop
         }
+
+        if self.delete_source_after_conversion and not result.get("error_count") and not result.get("stopped"):
+            source_files = self.get_multiple_source_files([".cue"])
+            for source_item, extract_type in source_files:
+                if extract_type is None:
+                    self.delete_source_after_success(source_item)
+
+        return result

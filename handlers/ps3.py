@@ -782,6 +782,8 @@ class Ps3DecryptHandler(ConversionHandler):
 
                     decrypted_games += 1
                     self.log(f"✅ Jeu PS3 decrypte et extrait: {game_folder.name}")
+                    if extract_type is None:
+                        self.delete_source_after_success(iso_file)
                     self.progress(map_iso_progress(100.0), f"Termine: {game_folder.name}")
 
                 if self.check_should_stop():

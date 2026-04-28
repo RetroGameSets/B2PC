@@ -466,12 +466,16 @@ class WbfsIsoHandler(ConversionHandler):
             converted = 0
             errors = 0
             total_sources = max(1, len(source_files))
+            base_progress = self.progress
 
             for i, (source_item, extract_type) in enumerate(source_files):
                 if self.check_should_stop():
                     break
 
-                self.progress((i / total_sources) * 100, f"Traitement {mode_label} {i+1}/{len(source_files)}")
+                # Progression volontairement basee UNIQUEMENT sur le nombre de sources.
+                # Exemple: 1/2 -> 0%, 2/2 -> 50%, puis 100% a la fin globale.
+                step_progress = (i / total_sources) * 100
+                base_progress(step_progress, f"Traitement {mode_label} {i+1}/{len(source_files)}")
 
                 if extract_type is None:
                     input_files = [source_item]
@@ -494,7 +498,13 @@ class WbfsIsoHandler(ConversionHandler):
                     if self.check_should_stop():
                         break
 
-                    ok, changed_outputs = self._convert_one_file(input_file, dest_path)
+                    # Neutraliser les pourcentages outils pour garder une progression purement X/Y.
+                    self.progress = lambda _p, _m: None
+
+                    try:
+                        ok, changed_outputs = self._convert_one_file(input_file, dest_path)
+                    finally:
+                        self.progress = base_progress
                     if not ok:
                         errors += 1
                         self.log(f"❌ Echec conversion: {input_file.name}")
@@ -502,6 +512,8 @@ class WbfsIsoHandler(ConversionHandler):
 
                     converted += 1
                     self.log(f"✅ Converti: {input_file.name}")
+                    if extract_type is None:
+                        self.delete_source_after_success(input_file)
 
                     if changed_outputs:
                         preview = ", ".join(changed_outputs[:3])

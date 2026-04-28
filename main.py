@@ -1,9 +1,11 @@
-APP_VERSION = "3.6.4.0"
+APP_VERSION = "3.6.5.0"
 UPDATE_URL = "https://raw.githubusercontent.com/RetroGameSets/B2PC/refs/heads/main/ressources/last_version.json"
+DISCORD_URL = "https://discord.gg/chz59Z9Bhj"
 
 import os
 import sys
 import urllib.request
+import webbrowser
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
@@ -12,7 +14,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QCursor
-from typing import Optional
+from typing import Optional, Dict, Any
 import logging
 from datetime import datetime
 import subprocess
@@ -72,11 +74,12 @@ class WorkerThread(QThread):
     log_message = pyqtSignal(str)
     finished = pyqtSignal(dict)
 
-    def __init__(self, operation, source_folder, dest_folder):
+    def __init__(self, operation, source_folder, dest_folder, delete_source_after_conversion=False):
         super().__init__()
         self.operation = operation
         self.source_folder = source_folder
         self.dest_folder = dest_folder
+        self.delete_source_after_conversion = delete_source_after_conversion
         self.log_file = None
         self.handler: Optional[ConversionHandler] = None  # Référence au handler pour pouvoir l'arrêter
         self.setup_logging()
@@ -220,6 +223,7 @@ class WorkerThread(QThread):
             # Configurer le handler
             self.handler.source_folder = self.source_folder
             self.handler.dest_folder = self.dest_folder
+            self.handler.delete_source_after_conversion = self.delete_source_after_conversion
 
             # Valider les outils
             if not self.handler.validate_tools():
@@ -251,10 +255,11 @@ class LogDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
     # Titre par défaut (sera adapté ensuite)
-        self.setWindowTitle("Logs de conversion")
+        self.setWindowTitle("Logs")
         self.setModal(True)
         self.resize(800, 600)
         self.worker_thread = None  # Référence au thread worker
+        self.stop_state = "ready"
 
         layout = QVBoxLayout(self)
 
@@ -273,17 +278,17 @@ class LogDialog(QDialog):
         button_layout = QHBoxLayout()
 
         # Bouton d'arrêt (rouge)
-        self.stop_button = QPushButton("🛑 Arrêter")  # FR default
+        self.stop_button = QPushButton("🛑")
         self.stop_button.setObjectName("stopButton")
         self.stop_button.clicked.connect(self.request_stop)
 
-        self.close_button = QPushButton("Fermer")
+        self.close_button = QPushButton("Close")
         self.close_button.clicked.connect(self.accept)
 
-        self.open_log_folder_button = QPushButton("Ouvrir dossier LOG")
+        self.open_log_folder_button = QPushButton("Open")
         self.open_log_folder_button.clicked.connect(self.open_log_folder)
 
-        self.save_log_button = QPushButton("💾 Sauvegarder logs")
+        self.save_log_button = QPushButton("Save")
         self.save_log_button.clicked.connect(self.save_current_log)
 
         button_layout.addWidget(self.stop_button)
@@ -292,6 +297,7 @@ class LogDialog(QDialog):
         button_layout.addWidget(self.open_log_folder_button)
         button_layout.addWidget(self.close_button)
         layout.addLayout(button_layout)
+        self.apply_language(getattr(parent, 'language', 'fr'), parent)
         
 
     def set_worker_thread(self, worker_thread):
@@ -302,21 +308,20 @@ class LogDialog(QDialog):
         """Demande l'arrêt de la conversion"""
         if self.worker_thread:
             self.stop_button.setEnabled(False)
-            self.stop_button.setText("🛑 Arrêt en cours...")
+            self.stop_state = "stopping"
             self.worker_thread.stop_conversion()
             self.add_log("🛑 Demande d'arrêt envoyée...")
             parent = self.parent()
-            if parent and isinstance(parent, B2PCMainWindow) and parent.language == 'en':
-                # Retraduire l'état du bouton
-                self.apply_language('en', parent.translations_en)
+            if parent and isinstance(parent, B2PCMainWindow):
+                self.apply_language(parent.language, parent)
         
     def on_finished(self, results):
         """Appelé quand la conversion est terminée"""
         self.stop_button.setEnabled(False)
-        self.stop_button.setText("✅ Terminé")  # Traduit plus bas si EN
+        self.stop_state = "done"
         parent = self.parent()
-        if parent and isinstance(parent, B2PCMainWindow) and parent.language == 'en':
-            self.apply_language('en', parent.translations_en)
+        if parent and isinstance(parent, B2PCMainWindow):
+            self.apply_language(parent.language, parent)
 
         error_count = 0
         has_error = False
@@ -328,25 +333,48 @@ class LogDialog(QDialog):
                 error_count = 0
 
         if isinstance(results, dict) and results.get('stopped', False):
+            final_progress_text = "Stopped"
+            if parent and isinstance(parent, B2PCMainWindow):
+                final_progress_text = parent.tr('ui.progress.stopped', language=parent.language)
             self.add_log("🛑 Conversion arrêtée par l'utilisateur")
         elif has_error or error_count > 0:
+            final_progress_text = "Finished with errors"
+            if parent and isinstance(parent, B2PCMainWindow):
+                final_progress_text = parent.tr('ui.progress.finished_with_errors', language=parent.language)
             self.add_log("⚠️ Conversion terminée avec erreurs")
         else:
+            final_progress_text = "Done"
+            if parent and isinstance(parent, B2PCMainWindow):
+                final_progress_text = parent.tr('ui.progress.done', language=parent.language)
             self.add_log("✅ Conversion terminée")
+
+        # Forcer un état final visible même si le dernier callback handler est partiel.
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(100)
+        self.progress_bar.setFormat(final_progress_text)
     
     def add_log(self, message):
         """Ajoute un message au log avec coloration"""
         timestamp = datetime.now().strftime("%H:%M:%S")
 
-        # Traduction dynamique si interface en anglais
         parent = self.parent()
+        if parent and isinstance(parent, B2PCMainWindow):
+            if not parent.should_display_log_message(message):
+                return
+
+        # Traduction dynamique si interface en anglais
         # Vérification stricte du type pour éviter l'avertissement de l'analyseur statique
         if parent and isinstance(parent, B2PCMainWindow) and parent.language == 'en':
             # Appel direct garanti par isinstance
             message = parent.translate_log_message(message)  # type: ignore[attr-defined]
+
+        is_dark_mode = bool(parent.dark_mode) if parent and isinstance(parent, B2PCMainWindow) else False
+        is_accessibility_mode = bool(getattr(parent, 'theme_mode', '') == 'accessibility') if parent and isinstance(parent, B2PCMainWindow) else False
         
-        # Déterminer la couleur selon le type de message
-        if "❌" in message or "Erreur" in message or "Échec" in message:
+        # En mode accessibilité: monochrome (pas de codage couleur par type de message).
+        if is_accessibility_mode:
+            color = "#FFFFFF"
+        elif "❌" in message or "Erreur" in message or "Échec" in message:
             color = "#dc2626"  # Rouge
         elif "⚠️" in message or "erreur(s)" in message or "avec erreurs" in message:
             color = "#eab308"  # Jaune
@@ -357,7 +385,8 @@ class LogDialog(QDialog):
         elif "🎉" in message or "Statistiques" in message:
             color = "#8b5cf6"  # Violet
         else:
-            color = "#374151"  # Gris foncé
+            # Les messages standards doivent rester lisibles en thème sombre.
+            color = "#cbd5e1" if is_dark_mode else "#374151"
         
         formatted_message = f'<span style="color: {color};">[{timestamp}] {message}</span><br>'
         self.log_text.insertHtml(formatted_message)
@@ -366,7 +395,19 @@ class LogDialog(QDialog):
     def update_progress(self, value, text):
         """Met à jour la barre de progression"""
         self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(value)
+        display_value = int(value)
+        match = re.search(r"(\d+)\s*/\s*(\d+)", text or "")
+        if match:
+            try:
+                current = int(match.group(1))
+                total = int(match.group(2))
+                if total > 0:
+                    # Progression par palier de fichier: 1/2 -> 0%, 2/2 -> 50%.
+                    display_value = int(((current - 1) / total) * 100)
+            except Exception:
+                display_value = int(value)
+        display_value = max(0, min(100, display_value))
+        self.progress_bar.setValue(display_value)
         self.progress_bar.setFormat(text)
     
     def hide_progress(self):
@@ -383,36 +424,42 @@ class LogDialog(QDialog):
 
     def save_current_log(self):
         """Sauvegarde le log actuel affiché"""
+        parent = self.parent() if isinstance(self.parent(), B2PCMainWindow) else None
+        if parent and isinstance(parent, B2PCMainWindow):
+            title = parent.tr('ui.log.save_dialog_title')
+            file_filter = parent.tr('ui.log.save_dialog_filter')
+            header_line = parent.tr('ui.log.file_header')
+            generated_on = parent.tr('ui.log.generated_on')
+            saved_prefix = parent.tr('ui.log.saved_prefix')
+            save_error_prefix = parent.tr('ui.log.save_error_prefix')
+        else:
+            title = 'Save logs'
+            file_filter = 'Text files (*.txt)'
+            header_line = 'B2PC - Conversion logs (Interface)'
+            generated_on = 'Generated on:'
+            saved_prefix = '💾 Logs saved:'
+            save_error_prefix = '❌ Save error:'
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename, _ = QFileDialog.getSaveFileName(
             self,
-            ("Sauvegarder les logs affichés" if getattr(self.parent(), 'language', 'fr') == 'fr' else "Save displayed logs"),
+            title,
             f"B2PC_logs_interface_{timestamp}.txt",
-            ("Fichiers texte (*.txt)" if getattr(self.parent(), 'language', 'fr') == 'fr' else "Text files (*.txt)")
+            file_filter
         )
         
         if filename:
             try:
                 with open(filename, 'w', encoding='utf-8') as f:
-                    if getattr(self.parent(), 'language', 'fr') == 'fr':
-                        f.write("B2PC - Logs de conversion (Interface)\n")
-                        f.write(f"Généré le: {datetime.now()}\n")
-                    else:
-                        f.write("B2PC - Conversion logs (Interface)\n")
-                        f.write(f"Generated on: {datetime.now()}\n")
+                    f.write(f"{header_line}\n")
+                    f.write(f"{generated_on} {datetime.now()}\n")
                     f.write("=" * 50 + "\n\n")
                     f.write(self.log_text.toPlainText())
                 
                 # Afficher confirmation
-                if getattr(self.parent(), 'language', 'fr') == 'fr':
-                    self.add_log(f"💾 Logs sauvegardés: {Path(filename).name}")
-                else:
-                    self.add_log(f"💾 Logs saved: {Path(filename).name}")
+                self.add_log(f"{saved_prefix} {Path(filename).name}")
             except Exception as e:
-                if getattr(self.parent(), 'language', 'fr') == 'fr':
-                    self.add_log(f"❌ Erreur sauvegarde: {str(e)}")
-                else:
-                    self.add_log(f"❌ Save error: {str(e)}")
+                self.add_log(f"{save_error_prefix} {str(e)}")
 
     def closeEvent(self, event):
         """Si une conversion est en cours, on masque juste la fenêtre pour pouvoir la réafficher."""
@@ -423,42 +470,167 @@ class LogDialog(QDialog):
             super().closeEvent(event)
 
     # --- Mise à jour langue ---
-    def apply_language(self, language: str, translations_en: dict):
+    def apply_language(self, language: str, main_window=None):
         """Met à jour les textes des boutons selon la langue."""
-        if language == 'en':
-            self.setWindowTitle(translations_en.get('Logs de conversion', 'Conversion logs'))
-            mapping = {
-                '🛑 Arrêter': '🛑 Stop',
-                '🛑 Arrêt en cours...': '🛑 Stopping...',
-                '✅ Terminé': '✅ Done',
-                'Fermer': 'Close',
-                '💾 Sauvegarder logs': '💾 Save logs',
-                'Ouvrir dossier LOG': 'Open LOG folder'
-            }
-            # Appliquer mapping pour états potentiels du bouton stop aussi
-            for btn in (self.stop_button, self.close_button, self.open_log_folder_button, self.save_log_button):
-                base_fr = None
-                for fr, en in mapping.items():
-                    if btn.text() in (fr, en):
-                        base_fr = fr
-                        break
-                if base_fr:
-                    btn.setText(mapping[base_fr])
-        else:
-            # Revenir au FR si nécessaire
-            reverse = {
-                '🛑 Stop': '🛑 Arrêter',
-                '🛑 Stopping...': '🛑 Arrêt en cours...',
-                '✅ Done': '✅ Terminé',
-                'Close': 'Fermer',
-                '💾 Save logs': '💾 Sauvegarder logs',
-                'Open LOG folder': 'Ouvrir dossier LOG'
-            }
-            if self.windowTitle() != 'Logs de conversion':
-                self.setWindowTitle('Logs de conversion')
-            for btn in (self.stop_button, self.close_button, self.open_log_folder_button, self.save_log_button):
-                if btn.text() in reverse:
-                    btn.setText(reverse[btn.text()])
+        if not main_window or not isinstance(main_window, B2PCMainWindow):
+            return
+
+        self.setWindowTitle(main_window.tr('ui.log.window_title', language=language))
+        stop_key = 'ui.log.stop'
+        if self.stop_state == 'stopping':
+            stop_key = 'ui.log.stopping'
+        elif self.stop_state == 'done':
+            stop_key = 'ui.log.done'
+        self.stop_button.setText(main_window.tr(stop_key, language=language))
+        self.close_button.setText(main_window.tr('ui.common.close', language=language))
+        self.save_log_button.setText(main_window.tr('ui.log.save_logs', language=language))
+        self.open_log_folder_button.setText(main_window.tr('ui.log.open_folder', language=language))
+
+
+class SettingsDialog(QDialog):
+    """Dialog dédié aux réglages persistants de l'application."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.main_window = parent
+        self.setModal(True)
+        self.resize(420, 330)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(14)
+
+        self.title_label = QLabel("Settings")
+        self.title_label.setObjectName("settingsTitle")
+        layout.addWidget(self.title_label)
+
+        theme_row = QHBoxLayout()
+        self.theme_label = QLabel("Theme")
+        theme_row.addWidget(self.theme_label)
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItem("Light", "light")
+        self.theme_combo.addItem("Dark", "dark")
+        self.theme_combo.addItem("Accessibility", "accessibility")
+        self.theme_combo.currentIndexChanged.connect(self.on_theme_changed)
+        theme_row.addWidget(self.theme_combo)
+        theme_row.addStretch()
+        layout.addLayout(theme_row)
+
+        self.remember_source_checkbox = QCheckBox("Remember source")
+        self.remember_source_checkbox.toggled.connect(self.on_remember_source_toggled)
+        layout.addWidget(self.remember_source_checkbox)
+
+        self.delete_source_checkbox = QCheckBox("Delete source after conversion")
+        self.delete_source_checkbox.toggled.connect(self.on_delete_source_toggled)
+        layout.addWidget(self.delete_source_checkbox)
+
+        log_level_row = QHBoxLayout()
+        self.log_level_label = QLabel("Log level")
+        log_level_row.addWidget(self.log_level_label)
+        self.log_level_combo = QComboBox()
+        self.log_level_combo.addItem("Verbose", "verbose")
+        self.log_level_combo.addItem("Errors only", "error_only")
+        self.log_level_combo.currentIndexChanged.connect(self.on_log_level_changed)
+        log_level_row.addWidget(self.log_level_combo)
+        log_level_row.addStretch()
+        layout.addLayout(log_level_row)
+
+        language_row = QHBoxLayout()
+        self.language_label = QLabel("Language")
+        language_row.addWidget(self.language_label)
+        self.language_combo = QComboBox()
+        self.language_combo.addItem("FR", "fr")
+        self.language_combo.addItem("EN", "en")
+        self.language_combo.currentIndexChanged.connect(self.on_language_changed)
+        language_row.addWidget(self.language_combo)
+        language_row.addStretch()
+        layout.addLayout(language_row)
+
+        action_row = QHBoxLayout()
+        self.support_button = QPushButton("Support")
+        self.support_button.clicked.connect(self.open_support)
+        action_row.addWidget(self.support_button)
+        action_row.addStretch()
+
+        self.close_button = QPushButton("Close")
+        self.close_button.clicked.connect(self.accept)
+        action_row.addWidget(self.close_button)
+        layout.addLayout(action_row)
+
+    def refresh_from_parent(self):
+        if not self.main_window:
+            return
+
+        self.theme_combo.blockSignals(True)
+        self.remember_source_checkbox.blockSignals(True)
+        self.delete_source_checkbox.blockSignals(True)
+        self.log_level_combo.blockSignals(True)
+        self.language_combo.blockSignals(True)
+
+        theme_index = self.theme_combo.findData(self.main_window.theme_mode)
+        if theme_index >= 0:
+            self.theme_combo.setCurrentIndex(theme_index)
+        self.remember_source_checkbox.setChecked(bool(self.main_window.remember_folders))
+        self.delete_source_checkbox.setChecked(bool(self.main_window.delete_source_after_conversion))
+        log_level_index = self.log_level_combo.findData(self.main_window.screen_log_level)
+        if log_level_index >= 0:
+            self.log_level_combo.setCurrentIndex(log_level_index)
+        index = self.language_combo.findData(self.main_window.language)
+        if index >= 0:
+            self.language_combo.setCurrentIndex(index)
+
+        self.theme_combo.blockSignals(False)
+        self.remember_source_checkbox.blockSignals(False)
+        self.delete_source_checkbox.blockSignals(False)
+        self.log_level_combo.blockSignals(False)
+        self.language_combo.blockSignals(False)
+
+    def apply_language(self, language, main_window=None):
+        if not main_window or not isinstance(main_window, B2PCMainWindow):
+            return
+
+        self.setWindowTitle(main_window.tr('ui.settings.title', language=language))
+        self.title_label.setText(main_window.tr('ui.settings.title', language=language))
+        self.theme_label.setText(main_window.tr('ui.settings.theme', language=language))
+        self.theme_combo.setItemText(0, main_window.tr('ui.settings.theme_light', language=language))
+        self.theme_combo.setItemText(1, main_window.tr('ui.settings.theme_dark', language=language))
+        self.theme_combo.setItemText(2, main_window.tr('ui.settings.theme_accessibility', language=language))
+        self.remember_source_checkbox.setText(main_window.tr('ui.settings.remember_source', language=language))
+        self.delete_source_checkbox.setText(main_window.tr('ui.settings.delete_source', language=language))
+        self.log_level_label.setText(main_window.tr('ui.settings.log_level', language=language))
+        self.log_level_combo.setItemText(0, main_window.tr('ui.settings.log_level_verbose', language=language))
+        self.log_level_combo.setItemText(1, main_window.tr('ui.settings.log_level_error_only', language=language))
+        self.language_label.setText(main_window.tr('ui.settings.language', language=language))
+        self.support_button.setText(main_window.tr('ui.settings.support', language=language))
+        self.close_button.setText(main_window.tr('ui.common.close', language=language))
+
+    def on_theme_changed(self):
+        if self.main_window:
+            mode = self.theme_combo.currentData()
+            if mode in ('light', 'dark', 'accessibility'):
+                self.main_window.set_theme_mode(str(mode))
+
+    def on_remember_source_toggled(self, checked):
+        if self.main_window:
+            self.main_window.set_remember_source(checked)
+
+    def on_delete_source_toggled(self, checked):
+        if self.main_window:
+            self.main_window.set_delete_source_after_conversion(checked)
+
+    def on_log_level_changed(self):
+        if self.main_window:
+            level = self.log_level_combo.currentData()
+            if level in ('verbose', 'error_only'):
+                self.main_window.set_screen_log_level(str(level))
+
+    def on_language_changed(self):
+        if self.main_window:
+            data = self.language_combo.currentData()
+            if data in ('fr', 'en'):
+                self.main_window.set_language(data)
+
+    def open_support(self):
+        webbrowser.open(DISCORD_URL)
 
 class B2PCMainWindow(QMainWindow):
     """Fenêtre principale de l'application B2PC"""
@@ -468,178 +640,51 @@ class B2PCMainWindow(QMainWindow):
         self.source_folder = ""
         self.dest_folder = ""
         self.dark_mode = False
+        self.theme_mode = "light"
+        self.delete_source_after_conversion = False
         self.current_worker = None
         self.log_dialog = None
+        self.settings_dialog = None
         # Charger paramétrage (langue) avant construction UI
         self.language = 'fr'
         self.remember_folders = True
+        self.screen_log_level = 'error_only'
         self._settings = {}
-        self._translation_store = []  # Liste de tuples (widget, base_text_key, dynamic_callable?)
-
-        # Dictionnaire de traductions (clé = texte FR original)
-        self.translations_en = {
-            'Dossier source (Archives autorisées):': 'Source folder (archives allowed):',
-            'Sélectionnez un dossier source...': 'Select a source folder...',
-            'Parcourir': 'Browse',
-            'Dossier destination:': 'Destination folder:',
-            'Sélectionnez un dossier destination...': 'Select a destination folder...',
-            'Mémoriser dossiers source/destination': 'Remember source/destination folders',
-            'Conversion': 'Conversion',
-            'ISO/CUE/GDI > CHD': 'ISO/CUE/GDI > CHD',
-            'ISO/CUE/GDI > CHD DVD': 'ISO/CUE/GDI > CHD DVD',
-            'Extraire CHD': 'Extract CHD',
-            'Merge BIN/CUE': 'Merge BIN/CUE',
-            '[GC/WII] ISO > RVZ': '[GC/WII] ISO > RVZ',
-            '[GC/WII] RVZ > ISO': '[GC/WII] RVZ > ISO',
-            '[WII] [WII] ISO > WBFS': '[WII] [WII] ISO > WBFS',
-            '[WII] WBFS <> ISO': '[WII] WBFS <> ISO',
-            '[WII] ISO > WBFS': '[WII] ISO > WBFS',
-            '[WII] WBFS > ISO': '[WII] WBFS > ISO',
-            '[WII] WBFS > RVZ': '[WII] WBFS > RVZ',
-            'Compression / Décompression': 'Compression / Decompression',
-            'wSquashFS Compression': 'wSquashFS Compression',
-            'wSquashFS Extraction': 'wSquashFS Extraction',
-            'Compression': 'Compress',
-            'Décompression': 'Decompression',
-            'Outils': 'Tools',
-            '[XBOX] Patch ISO': '[XBOX] Patch ISO',
-            '[PS3] Decrypt ISO & Convert': '[PS3] Decrypt ISO & Convert',
-            'Eteindre la lumière 🌙': 'Enable dark mode 🌙',
-            'Allumer la lumière ☀️': 'Disable dark mode ☀️',
-            '🛑 Arrêter': '🛑 Stop',
-            '🛑 Arrêt en cours...': '🛑 Stopping...',
-            'Fermer': 'Close',
-            '💾 Sauvegarder logs': '💾 Save logs',
-            'Ouvrir dossier LOG': 'Open LOG folder',
-            'Logs de conversion': 'Conversion logs',
-            'Conversion ISO/CUE/GDI > CHD': 'ISO/CUE/GDI > CHD Conversion',
-            'Conversion ISO/CUE/GDI > CHD DVD': 'ISO/CUE/GDI > CHD DVD Conversion',
-            'Extract CHD': 'Extract CHD',
-            'Merge BIN/CUE': 'Merge BIN/CUE',
-            'Conversion ISO vers RVZ': 'ISO to RVZ Conversion',
-            'wSquashFS Extraction': 'wSquashFS Extraction',
-            '[XBOX] Patch ISO': '[XBOX] Patch ISO',
-            '[PS3] Decrypt ISO & Convert': '[PS3] Decrypt ISO & Convert',
-            'Infos CHD': 'CHD Info',
-            'Analyse CHD': 'CHD Analysis',
-            'Taille originale': 'Original size',
-            'Taille compressée': 'Compressed size',
-            'Ratio': 'Ratio'
-            , 'Afficher logs': 'Show logs'
+        self._translation_store = []  # Liste de tuples (widget, i18n_key)
+        self.translations_fr: Dict[str, str] = {}
+        self.translations_en: Dict[str, str] = {}
+        self.log_translations_fr: Dict[str, str] = {}
+        self.log_translations_en: Dict[str, str] = {}
+        self.operation_title_keys: Dict[str, str] = {
+            "Conversion ISO/CUE/GDI > CHD": "ui.operation.chd_convert",
+            "Extraire CHD": "ui.operation.extract_chd",
+            "Merge BIN/CUE": "ui.operation.merge_bin_cue",
+            "Conversion ISO vers RVZ": "ui.operation.iso_to_rvz",
+            "wSquashFS Compression": "ui.operation.wsquashfs_compress",
+            "wSquashFS Extraction": "ui.operation.wsquashfs_extract",
+            "[XBOX] Patch ISO": "ui.operation.xbox_patch",
+            "[PS3] Decrypt ISO & Convert": "ui.operation.ps3_decrypt",
+            "[WII] ISO > WBFS": "ui.operation.wii_iso_to_wbfs",
+            "[WII] WBFS > ISO": "ui.operation.wii_wbfs_to_iso",
+            "[WII] WBFS > RVZ": "ui.operation.wii_wbfs_to_rvz",
+            "[GC/WII] RVZ > ISO": "ui.operation.rvz_to_iso"
         }
-
-        # Fragments de traduction pour les messages de log (FR -> EN)
-        self.log_translations_en = {
-            "Début de l'opération": "Start of operation",
-            "[PS3] Decrypt ISO & Convert": "[PS3] Decrypt ISO & Convert",
-            "[WII] ISO > WBFS": "[WII] ISO > WBFS",
-            "[WII] WBFS > ISO": "[WII] WBFS > ISO",
-            "[WII] WBFS > RVZ": "[WII] WBFS > RVZ",
-            "Dossier source": "Source folder",
-            "Dossier destination": "Destination folder",
-            "Opération terminée avec succès": "Operation completed successfully",
-            "Opération terminée avec erreur": "Operation finished with error",
-            "Opération terminée avec": "Operation finished with",
-            "Log sauvegardé": "Log saved",
-            "Erreur critique": "Critical error",
-            "Demande d'arrêt envoyée": "Stop request sent",
-            "Conversion arrêtée par l'utilisateur": "Conversion stopped by user",
-            "Conversion arretee par l'utilisateur": "Conversion stopped by user",
-            "Conversion terminée": "Conversion finished",
-            "Conversion terminée avec erreurs": "Conversion finished with errors",
-            "Fichier de log créé": "Log file created",
-            "Outil manquant": "Missing tool",
-            "Tous les outils sont présents": "All required tools are present",
-            "Arrêt de la conversion demandé": "Conversion stop requested",
-            "Processus terminé": "Process terminated",
-            "Processus forcé à s'arrêter": "Process force-stopped",
-            "Impossible d'arrêter le processus": "Unable to stop process",
-            "Exception lors de l'exécution": "Exception while running",
-            "Conversion arrêtée": "Conversion stopped",
-            "Archive extraite": "Archive extracted",
-            "Échec extraction": "Extraction failed",
-            "Extraction archive": "Extracting archive",
-            "Détecté": "Detected",
-            "niveau racine": "root level",
-            "Outils PS3 detectes": "PS3 tools detected",
-            "Traitement de": "Processing",
-            "source(s) PS3": "PS3 source(s)",
-            "source(s) WBFS/ISO": "WBFS/ISO source(s)",
-            "Trouve": "Found",
-            "ISO(s) dans l'archive": "ISO(s) in archive",
-            "fichier(s) ISO/WBFS dans l'archive": "ISO/WBFS file(s) in archive",
-            "Recherche de cle dans": "Searching key in",
-            "Cle trouvee dans zip": "Key found in zip",
-            "Decryptage PS3": "PS3 decryption",
-            "Moteur 7z utilise": "7z engine used",
-            "Extraction ISO PS3": "PS3 ISO extraction",
-            " vers:": " to:",
-            "Jeu PS3 decrypte et extrait": "PS3 game decrypted and extracted",
-            "Conversion ISO -> WBFS": "ISO -> WBFS conversion",
-            "Conversion WBFS -> ISO": "WBFS -> ISO conversion",
-            "Converti": "Converted",
-            "Sortie detectee": "Detected output",
-            "Aucune sortie detectee automatiquement": "No output auto-detected",
-            "fichier peut deja exister": "file may already exist",
-            "Conversion WBFS/ISO terminee": "WBFS/ISO conversion completed",
-            "Outils WBFS detectes": "WBFS tools detected",
-            "source(s) ISO": "ISO source(s)",
-            "source(s) ISO/RVZ": "ISO/RVZ source(s)",
-            "source(s) WBFS": "WBFS source(s)",
-            "Conversion [WII] ISO > WBFS terminee": "[WII] ISO > WBFS conversion completed",
-            "Conversion [WII] WBFS > ISO terminee": "[WII] WBFS > ISO conversion completed",
-            "Conversion [WII] WBFS > RVZ terminee": "[WII] WBFS > RVZ conversion completed",
-            "Conversion intermediaire RVZ -> ISO": "Intermediate RVZ -> ISO conversion",
-            "Echec conversion RVZ -> ISO": "RVZ -> ISO conversion failed",
-            "Echec conversion ISO -> RVZ": "ISO -> RVZ conversion failed",
-            "ISO intermediaire introuvable": "Intermediate ISO not found",
-            "Sortie ISO introuvable pour conversion RVZ": "ISO output not found for RVZ conversion",
-            "ISO intermediaire supprime": "Intermediate ISO deleted",
-            "Fichier ignore: ce n'est pas un ISO Wii (GameCube ou format non supporte)": "File skipped: this is not a Wii ISO (GameCube or unsupported format)",
-            "Dossier ignoré (suffixe non supporté)": "Ignored folder (unsupported suffix)",
-            "Archive ignorée en wSquashFS Compression": "Archive ignored in wSquashFS compression",
-            "Aucun dossier .pc/.ps3 trouvé pour la compression": "No .pc/.ps3 folder found for compression",
-            "Dossiers .pc/.ps3 détectés": ".pc/.ps3 folders detected",
-            "Fichiers .wsquashfs/.squashfs détectés": ".wsquashfs/.squashfs files detected",
-            "Aucun fichier .wsquashfs/.squashfs ni dossier .pc/.ps3 trouvé": "No .wsquashfs/.squashfs file or .pc/.ps3 folder found",
-            "Sortie deplacee depuis TEMP": "Output moved from TEMP",
-            "Sortie introuvable dans TEMP apres conversion": "Output not found in TEMP after conversion",
-            "Echec deplacement sortie depuis TEMP": "Failed moving output from TEMP",
-            "Sortie ISO deplacee vers destination": "ISO output moved to destination",
-            "Sortie ISO introuvable apres conversion": "ISO output not found after conversion",
-            "Echec deplacement sortie ISO vers destination": "Failed moving ISO output to destination",
-            "Exécution :": "Execution :",
-            "Execution completed in": "Execution completed in",
-            "Fichier déjà converti": "File already converted",
-            "Déjà converti": "Already converted",
-            "Échec conversion": "Conversion failed",
-            "Echec conversion": "Conversion failed",
-            "Extraction de l'archive": "Extracting archive",
-            "Extension ignorée": "Ignored extension",
-            "Sources détectées": "Detected sources",
-            "Fichier": "File",
-            "Trouvé": "Found",
-            "fichiers exploitables dans l'archive": "processable files in archive",
-            "Logs sauvegardés": "Logs saved",
-            "Erreur sauvegarde": "Save error",
-            "Dossier temporaire créé": "Temporary folder created",
-            "Dossier temporaire nettoyé": "Temporary folder cleaned",
-            "Dossier TEMP supprimé": "TEMP folder deleted",
-            "Erreur nettoyage dossier temporaire": "Temp folder cleanup error",
-            "Type détecté": "Detected type",
-            "Déjà extrait": "Already extracted",
-            "Impossible de lire infos CHD": "Unable to read CHD info",
-            "Échec extraction DVD": "DVD extraction failed",
-            "Échec extraction CD": "CD extraction failed",
-            "Extrait" : "Extracted",
-            "Aucun fichier CHD trouvé": "No CHD file found"
-        }
+        self.load_translations()
 
         # Charger les paramètres persistants puis configuration UI
         self._settings = self.load_settings()
         if isinstance(self._settings, dict):
             self.language = self._settings.get('language', 'fr')
+            loaded_theme_mode = str(self._settings.get('theme_mode', '') or '').strip().lower()
+            if loaded_theme_mode in ('light', 'dark', 'accessibility'):
+                self.theme_mode = loaded_theme_mode
+            else:
+                self.theme_mode = 'dark' if bool(self._settings.get('dark_mode', False)) else 'light'
+            self.dark_mode = self.theme_mode == 'dark'
             self.remember_folders = bool(self._settings.get('remember_folders', True))
+            self.delete_source_after_conversion = bool(self._settings.get('delete_source_after_conversion', False))
+            loaded_log_level = str(self._settings.get('screen_log_level', 'error_only') or '').strip().lower()
+            self.screen_log_level = loaded_log_level if loaded_log_level in ('verbose', 'error_only') else 'error_only'
         # Charger la configuration UI
         self.ui_config = self.load_ui_config()
 
@@ -648,15 +693,49 @@ class B2PCMainWindow(QMainWindow):
         self.apply_styles()
         # Appliquer la langue chargée
         if self.language == 'en':
-            # Mettre à jour combo si déjà créé dans footer
-            try:
-                if hasattr(self, 'language_combo') and self.language_combo:
-                    idx = self.language_combo.findData('en')
-                    if idx >= 0:
-                        self.language_combo.setCurrentIndex(idx)
-            except Exception:
-                pass
             self.retranslate_ui()
+
+    def load_translation_file(self, language: str) -> Dict[str, Any]:
+        """Charge un fichier de traduction JSON depuis ressources/i18n."""
+        try:
+            path = resource_path(f"ressources/i18n/{language}.json")
+            if not os.path.exists(path):
+                return {}
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return data
+        except Exception as e:
+            print(f"Erreur chargement traduction {language}: {e}")
+        return {}
+
+    def load_translations(self):
+        """Charge les chaînes UI et logs depuis fr.json/en.json."""
+        fr_data = self.load_translation_file('fr')
+        en_data = self.load_translation_file('en')
+
+        fr_ui = fr_data.get('ui', {}) if isinstance(fr_data, dict) else {}
+        en_ui = en_data.get('ui', {}) if isinstance(en_data, dict) else {}
+        fr_logs = fr_data.get('log_fragments', {}) if isinstance(fr_data, dict) else {}
+        en_logs = en_data.get('log_fragments', {}) if isinstance(en_data, dict) else {}
+
+        self.translations_fr = fr_ui if isinstance(fr_ui, dict) else {}
+        self.translations_en = en_ui if isinstance(en_ui, dict) else {}
+        self.log_translations_fr = fr_logs if isinstance(fr_logs, dict) else {}
+        self.log_translations_en = en_logs if isinstance(en_logs, dict) else {}
+
+    def tr(self, key: str, language: Optional[str] = None, default: Optional[str] = None) -> str:
+        lang = language or self.language
+        table = self.translations_en if lang == 'en' else self.translations_fr
+        fallback = self.translations_fr
+
+        if key in table:
+            return str(table[key])
+        if key in fallback:
+            return str(fallback[key])
+        if default is not None:
+            return default
+        return key
 
     # ---------------- Paramètres / Configuration ----------------
     def get_config_dir(self):
@@ -679,12 +758,15 @@ class B2PCMainWindow(QMainWindow):
         try:
             cfg_file = self.get_config_dir() / 'settings.json'
             source_saved = self.source_folder if self.remember_folders else ''
-            dest_saved = self.dest_folder if self.remember_folders else ''
             data = {
                 'language': self.language,
+                'dark_mode': self.dark_mode,
+                'theme_mode': self.theme_mode,
                 'remember_folders': self.remember_folders,
+                'delete_source_after_conversion': self.delete_source_after_conversion,
+                'screen_log_level': self.screen_log_level,
                 'source_folder': source_saved,
-                'dest_folder': dest_saved
+                'dest_folder': ''
             }
             with open(cfg_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
@@ -720,23 +802,16 @@ class B2PCMainWindow(QMainWindow):
         if not isinstance(self._settings, dict):
             return
 
-        if hasattr(self, 'remember_folders_checkbox'):
-            self.remember_folders_checkbox.setChecked(self.remember_folders)
-
         if not self.remember_folders:
             return
 
         saved_source = str(self._settings.get('source_folder', '') or '').strip()
-        saved_dest = str(self._settings.get('dest_folder', '') or '').strip()
 
         if saved_source and Path(saved_source).exists():
             self.source_folder = saved_source
             self.source_input.setText(saved_source)
 
-        if saved_dest and Path(saved_dest).exists():
-            self.dest_folder = saved_dest
-            self.dest_input.setText(saved_dest)
-        elif self.source_folder and not self.dest_input.text().strip():
+        if self.source_folder and not self.dest_input.text().strip():
             self.apply_default_dest_if_empty(self.source_folder, persist=True)
     
     def load_ui_config(self):
@@ -757,7 +832,7 @@ class B2PCMainWindow(QMainWindow):
 
     def init_ui(self):
         """Initialise l'interface utilisateur"""
-        self.setWindowTitle("B2PC - Batch Retro Games Converter")
+        self.setWindowTitle(self.tr('ui.app.title', default='B2PC - Batch Retro Games Converter'))
 
         # Charger les dimensions depuis ui.json
         window_config = self.ui_config.get("window", {})
@@ -776,6 +851,9 @@ class B2PCMainWindow(QMainWindow):
 
         # Section des dossiers
         self.create_folder_section(main_layout)
+
+        # Barre de progression globale (toujours visible dans la fenêtre principale)
+        self.create_main_progress_section(main_layout)
 
         # Section des boutons de conversion
         self.create_conversion_section(main_layout)
@@ -798,10 +876,11 @@ class B2PCMainWindow(QMainWindow):
         header_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         # Logo (placeholder)
-        logo_label = QLabel("🎮 B2PC")
+        logo_label = QLabel(self.tr('ui.header.logo', default='🎮 B2PC'))
         logo_label.setObjectName("logoLabel")
         logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header_layout.addWidget(logo_label)
+        self._translation_store.append((logo_label, 'ui.header.logo'))
         
         # Réduction des marges
         header_layout.setContentsMargins(0, 10, 0, 10)
@@ -821,21 +900,21 @@ class B2PCMainWindow(QMainWindow):
         source_container = QWidget()
         source_layout = QVBoxLayout(source_container)
         source_layout.setContentsMargins(0, 0, 0, 0)
-        source_label = QLabel("Dossier source (Archives autorisées):")
+        source_label = QLabel(self.tr('ui.folder.source.label', default='Dossier source (Archives autorisées):'))
         source_label.setObjectName("sourceLabel")
         source_layout.addWidget(source_label)
-        self._translation_store.append((source_label, 'Dossier source (Archives autorisées):'))
+        self._translation_store.append((source_label, 'ui.folder.source.label'))
         source_row = QHBoxLayout()
         self.source_input = QLineEdit()
         self.source_input.setReadOnly(True)
-        self.source_input.setPlaceholderText("Sélectionnez un dossier source...")
-        self._translation_store.append((self.source_input, 'Sélectionnez un dossier source...'))
+        self.source_input.setPlaceholderText(self.tr('ui.folder.source.placeholder', default='Sélectionnez un dossier source...'))
+        self._translation_store.append((self.source_input, 'ui.folder.source.placeholder'))
         self.source_input.textChanged.connect(self.update_button_states)
         source_row.addWidget(self.source_input)
-        self.source_button = QPushButton("Parcourir")
+        self.source_button = QPushButton(self.tr('ui.common.browse', default='Parcourir'))
         self.source_button.clicked.connect(self.select_source_folder)
         source_row.addWidget(self.source_button)
-        self._translation_store.append((self.source_button, 'Parcourir'))
+        self._translation_store.append((self.source_button, 'ui.common.browse'))
         source_layout.addLayout(source_row)
         folders_row.addWidget(source_container)
 
@@ -843,31 +922,25 @@ class B2PCMainWindow(QMainWindow):
         dest_container = QWidget()
         dest_layout = QVBoxLayout(dest_container)
         dest_layout.setContentsMargins(0, 0, 0, 0)
-        dest_label = QLabel("Dossier destination:")
+        dest_label = QLabel(self.tr('ui.folder.dest.label', default='Dossier destination:'))
         dest_label.setObjectName("destLabel")
         dest_layout.addWidget(dest_label)
-        self._translation_store.append((dest_label, 'Dossier destination:'))
+        self._translation_store.append((dest_label, 'ui.folder.dest.label'))
         dest_row = QHBoxLayout()
         self.dest_input = QLineEdit()
         self.dest_input.setReadOnly(True)
-        self.dest_input.setPlaceholderText("Sélectionnez un dossier destination...")
-        self._translation_store.append((self.dest_input, 'Sélectionnez un dossier destination...'))
+        self.dest_input.setPlaceholderText(self.tr('ui.folder.dest.placeholder', default='Sélectionnez un dossier destination...'))
+        self._translation_store.append((self.dest_input, 'ui.folder.dest.placeholder'))
         self.dest_input.textChanged.connect(self.update_button_states)
         dest_row.addWidget(self.dest_input)
-        self.dest_button = QPushButton("Parcourir")
+        self.dest_button = QPushButton(self.tr('ui.common.browse', default='Parcourir'))
         self.dest_button.clicked.connect(self.select_dest_folder)
         dest_row.addWidget(self.dest_button)
-        self._translation_store.append((self.dest_button, 'Parcourir'))
+        self._translation_store.append((self.dest_button, 'ui.common.browse'))
         dest_layout.addLayout(dest_row)
         folders_row.addWidget(dest_container)
 
         folder_layout.addLayout(folders_row)
-
-        self.remember_folders_checkbox = QCheckBox("Mémoriser dossiers source/destination")
-        self.remember_folders_checkbox.setChecked(self.remember_folders)
-        self.remember_folders_checkbox.stateChanged.connect(self.on_remember_folders_changed)
-        self._translation_store.append((self.remember_folders_checkbox, 'Mémoriser dossiers source/destination'))
-        folder_layout.addWidget(self.remember_folders_checkbox)
 
         parent_layout.addWidget(folder_container)
     
@@ -891,37 +964,37 @@ class B2PCMainWindow(QMainWindow):
         
         # Colonne 1: Conversion
         conv_group = self.create_button_group(
-            "Compression",
+            "ui.group.compression",
             [
-                ("ISO/CUE/GDI > CHD", self.convert_chd_v5, "#22c55e"),                
-                ("wSquashFS Compression", self.compress_wsquashfs, "#eab308"),
-                ("[GC/WII] ISO > RVZ", self.convert_iso_rvz, "#22c55e"),
-                ("[WII] ISO/RVZ > WBFS", self.convert_iso_to_wbfs, "#22c55e"),                
-                ("[WII] WBFS > RVZ", self.convert_wbfs_to_rvz, "#22c55e"),
+                ("ui.button.iso_chd", self.convert_chd_v5, "#22c55e"),
+                ("ui.button.wsquashfs_compress", self.compress_wsquashfs, "#eab308"),
+                ("ui.button.iso_to_rvz", self.convert_iso_rvz, "#22c55e"),
+                ("ui.button.iso_rvz_to_wbfs", self.convert_iso_to_wbfs, "#22c55e"),
+                ("ui.button.wbfs_to_rvz", self.convert_wbfs_to_rvz, "#22c55e"),
             ]
         )
         self.button_groups.append(conv_group)
         
         # Colonne 2: Compression / Décompression
         compress_group = self.create_button_group(
-            "Décompression",
+            "ui.group.decompression",
             [
-                ("Extraire CHD", self.extract_chd, "#22c55e"),
-                ("wSquashFS Extraction", self.extract_wsquashfs, "#eab308"),
-                ("[GC/WII] RVZ > ISO", self.convert_rvz_to_iso, "#22c55e"),
-                ("[WII] WBFS > ISO", self.convert_wbfs_to_iso, "#22c55e"),
+                ("ui.button.extract_chd", self.extract_chd, "#22c55e"),
+                ("ui.button.wsquashfs_extract", self.extract_wsquashfs, "#eab308"),
+                ("ui.button.rvz_to_iso", self.convert_rvz_to_iso, "#22c55e"),
+                ("ui.button.wbfs_to_iso", self.convert_wbfs_to_iso, "#22c55e"),
             ]
         )
         self.button_groups.append(compress_group)
         
         # Colonne 3: Outils
         tools_group = self.create_button_group(
-            "Outils",
+            "ui.group.tools",
             [
-                ("Infos CHD", self.show_chd_info, "#a855f7"),
-                ("[XBOX] Patch ISO", self.patch_xbox_iso, "#a855f7"),
-                ("Merge BIN/CUE", self.merge_bin_cue, "#22c55e"),
-                ("[PS3] Decrypt ISO & Convert", self.decrypt_ps3_iso, "#a855f7")
+                ("ui.button.chd_info", self.show_chd_info, "#a855f7"),
+                ("ui.button.xbox_patch", self.patch_xbox_iso, "#a855f7"),
+                ("ui.button.merge_bin_cue", self.merge_bin_cue, "#22c55e"),
+                ("ui.button.ps3_decrypt", self.decrypt_ps3_iso, "#a855f7")
             ]
         )
         self.button_groups.append(tools_group)
@@ -931,6 +1004,63 @@ class B2PCMainWindow(QMainWindow):
         
         scroll_area.setWidget(conversion_container)
         parent_layout.addWidget(scroll_area)
+
+    def create_main_progress_section(self, parent_layout):
+        """Crée la barre de progression principale de l'application."""
+        self.main_progress_bar = QProgressBar()
+        self.main_progress_bar.setVisible(False)
+        self.main_progress_bar.setValue(0)
+        self.main_progress_bar.setFormat("")
+        parent_layout.addWidget(self.main_progress_bar)
+
+    def update_main_progress(self, value: int, text: str):
+        """Met à jour la progression affichée dans la fenêtre principale."""
+        if not hasattr(self, 'main_progress_bar'):
+            return
+        safe_value = int(value)
+        match = re.search(r"(\d+)\s*/\s*(\d+)", text or "")
+        if match:
+            try:
+                current = int(match.group(1))
+                total = int(match.group(2))
+                if total > 0:
+                    # Même logique que dans la fenêtre de logs.
+                    safe_value = int(((current - 1) / total) * 100)
+            except Exception:
+                safe_value = int(value)
+        safe_value = max(0, min(100, safe_value))
+        self.main_progress_bar.setVisible(True)
+        self.main_progress_bar.setValue(safe_value)
+        self.main_progress_bar.setFormat(text)
+
+    def finalize_main_progress(self, results):
+        """Force l'état final de la barre principale à 100% avec un texte explicite."""
+        if not hasattr(self, 'main_progress_bar'):
+            return
+
+        progress_text = self.tr('ui.progress.done', default='Done')
+        if isinstance(results, dict) and results.get('stopped', False):
+            progress_text = self.tr('ui.progress.stopped', default='Stopped')
+        else:
+            try:
+                error_count = int(results.get('error_count', 0) or 0) if isinstance(results, dict) else 0
+            except Exception:
+                error_count = 0
+            has_error = bool(results.get('error')) if isinstance(results, dict) else False
+            if has_error or error_count > 0:
+                progress_text = self.tr('ui.progress.finished_with_errors', default='Finished with errors')
+
+        self.main_progress_bar.setVisible(True)
+        self.main_progress_bar.setValue(100)
+        self.main_progress_bar.setFormat(progress_text)
+
+    def hide_main_progress(self):
+        """Masque la progression principale en fin d'opération."""
+        if not hasattr(self, 'main_progress_bar'):
+            return
+        self.main_progress_bar.setVisible(False)
+        self.main_progress_bar.setValue(0)
+        self.main_progress_bar.setFormat("")
     
     def arrange_button_groups(self):
         """Arrange les groupes de boutons selon la taille de la fenêtre"""
@@ -992,17 +1122,17 @@ class B2PCMainWindow(QMainWindow):
                     new_style = re.sub(r'font-size:\s*\d+px', f'font-size: {font_size}', current_style)
                     button.setStyleSheet(new_style)
                 
-    def create_button_group(self, title, buttons):
+    def create_button_group(self, title_key, buttons):
         """Crée un groupe de boutons avec titre"""
         group_widget = QWidget()
         group_layout = QVBoxLayout(group_widget)
         group_layout.setSpacing(10)
 
         # Titre
-        title_label = QLabel(title)
+        title_label = QLabel(self.tr(title_key, default=title_key))
         title_label.setObjectName("buttonGroupTitle")
         group_layout.addWidget(title_label)
-        self._translation_store.append((title_label, title))
+        self._translation_store.append((title_label, title_key))
 
         # Boutons
         self.conversion_buttons = getattr(self, 'conversion_buttons', [])
@@ -1010,28 +1140,28 @@ class B2PCMainWindow(QMainWindow):
         group_color_override = None
         try:
             colors_cfg = self.ui_config.get("colors", {})
-            if title == "Compression":
+            if title_key == "ui.group.compression":
                 group_color_override = colors_cfg.get("green", "#22c55e")
-            elif title == "Décompression":
+            elif title_key == "ui.group.decompression":
                 group_color_override = colors_cfg.get("yellow", "#eab308")
-            elif title == "Outils":
+            elif title_key == "ui.group.tools":
                 group_color_override = colors_cfg.get("purple", "#a855f7")
         except Exception:
             group_color_override = None
 
         for button_info in buttons:
             if len(button_info) == 3:
-                text, callback, color = button_info
+                text_key, callback, color = button_info
                 disabled = False
             else:
-                text, callback, color, disabled = button_info
+                text_key, callback, color, disabled = button_info
 
             if group_color_override:
                 color = group_color_override
 
-            button = QPushButton(text)
+            button = QPushButton(self.tr(text_key, default=text_key))
             button.setObjectName("conversionButton")
-            self._translation_store.append((button, text))
+            self._translation_store.append((button, text_key))
             color_class = None
             if color == self.ui_config["colors"].get("green"):
                 color_class = "green"
@@ -1056,14 +1186,14 @@ class B2PCMainWindow(QMainWindow):
                     button.clicked.connect(callback)
                 self.conversion_buttons.append(button)
                 # Conserver une référence spécifique pour logique d'activation différente
-                if text == "Infos CHD":
+                if text_key == "ui.button.chd_info":
                     self.chd_info_button = button
             group_layout.addWidget(button)
         group_layout.addStretch()
         return group_widget
     
     def create_footer(self, parent_layout):
-        """Crée le footer avec version et bouton dark mode"""
+        """Crée le footer avec version et actions permanentes."""
         footer_layout = QHBoxLayout()
         footer_layout.setContentsMargins(0, 20, 0, 0)
 
@@ -1077,25 +1207,17 @@ class B2PCMainWindow(QMainWindow):
         footer_layout.addStretch()
 
         # Bouton logs (accessible en permanence)
-        self.show_logs_button = QPushButton("Afficher logs")
+        self.show_logs_button = QPushButton(self.tr('ui.footer.show_logs', default='Afficher logs'))
         self.show_logs_button.clicked.connect(self.show_logs_dialog)
         footer_layout.addWidget(self.show_logs_button)
-        self._translation_store.append((self.show_logs_button, 'Afficher logs'))
+        self._translation_store.append((self.show_logs_button, 'ui.footer.show_logs'))
 
-        # Bouton dark mode
-        self.dark_mode_button = QPushButton("Eteindre la lumière 🌙")
-        self.dark_mode_button.clicked.connect(self.toggle_dark_mode)
-        footer_layout.addWidget(self.dark_mode_button)
-        self._translation_store.append((self.dark_mode_button, 'Eteindre la lumière 🌙'))
+        self.settings_button = QPushButton(self.tr('ui.footer.settings', default='⚙ Réglages'))
+        self.settings_button.setObjectName("settingsButton")
+        self.settings_button.clicked.connect(self.open_settings_dialog)
+        footer_layout.addWidget(self.settings_button)
+        self._translation_store.append((self.settings_button, 'ui.footer.settings'))
 
-    # Switch langue (Combo compact)
-        self.language_combo = QComboBox()
-        self.language_combo.addItem('FR', 'fr')
-        self.language_combo.addItem('EN', 'en')
-        self.language_combo.setCurrentIndex(0)
-        self.language_combo.setFixedWidth(60)
-        self.language_combo.currentIndexChanged.connect(self.on_language_changed)
-        footer_layout.addWidget(self.language_combo)
         parent_layout.addLayout(footer_layout)
     
     def darken_color(self, color):
@@ -1112,7 +1234,13 @@ class B2PCMainWindow(QMainWindow):
         """Recharge et applique le QSS à chaque appel (chemin compatible PyInstaller)."""
         try:
             app = QApplication.instance()
-            qss_path = resource_path(f"ressources/themes/{'dark.qss' if self.dark_mode else 'light.qss'}")
+            theme_file = 'light.qss'
+            if self.theme_mode == 'dark':
+                theme_file = 'dark.qss'
+            elif self.theme_mode == 'accessibility':
+                theme_file = 'accessibility.qss'
+
+            qss_path = resource_path(f"ressources/themes/{theme_file}")
             if os.path.exists(qss_path):
                 with open(qss_path, "r", encoding="utf-8") as f:
                     style = f.read()
@@ -1127,54 +1255,87 @@ class B2PCMainWindow(QMainWindow):
     
     def toggle_dark_mode(self):
         """Bascule entre mode sombre et clair"""
-        self.dark_mode = not self.dark_mode
-        # Mettre à jour le texte suivant la langue
-        if self.dark_mode:
-            fr_text = "Allumer la lumière ☀️"
-        else:
-            fr_text = "Eteindre la lumière 🌙"
-        if self.language == 'en':
-            self.dark_mode_button.setText(self.translations_en.get(fr_text, fr_text))
-        else:
-            self.dark_mode_button.setText(fr_text)
+        self.set_theme_mode('light' if self.dark_mode else 'dark')
+
+    def set_dark_mode(self, enabled: bool):
+        self.set_theme_mode('dark' if bool(enabled) else 'light')
+
+    def set_theme_mode(self, mode: str):
+        normalized = str(mode or '').strip().lower()
+        if normalized not in ('light', 'dark', 'accessibility'):
+            normalized = 'light'
+
+        self.theme_mode = normalized
+        self.dark_mode = normalized == 'dark'
         self.apply_styles()
+        self.save_settings()
 
-    def on_language_changed(self):
-        data = self.language_combo.currentData()
-        if data in ('fr','en'):
-            self.language = data
-            self.retranslate_ui()
-            self.save_settings()
+    def set_language(self, language_code: str):
+        if language_code not in ('fr', 'en'):
+            return
+        self.language = language_code
+        self.retranslate_ui()
+        self.save_settings()
 
-    def on_remember_folders_changed(self, _state=None):
-        if hasattr(self, 'remember_folders_checkbox'):
-            self.remember_folders = self.remember_folders_checkbox.isChecked()
-            self.save_settings()
+    def set_remember_source(self, enabled: bool):
+        self.remember_folders = bool(enabled)
+        self.save_settings()
+
+    def set_delete_source_after_conversion(self, enabled: bool):
+        self.delete_source_after_conversion = bool(enabled)
+        self.save_settings()
+
+    def set_screen_log_level(self, level: str):
+        normalized = str(level or '').strip().lower()
+        if normalized not in ('verbose', 'error_only'):
+            normalized = 'error_only'
+        self.screen_log_level = normalized
+        self.save_settings()
+
+    def should_display_log_message(self, message: str) -> bool:
+        """Filtre les logs affichés à l'écran selon le niveau choisi."""
+        if self.screen_log_level != 'error_only':
+            return True
+
+        text = str(message or '')
+        allowed_tokens = (
+            '📄 Fichier:',
+            '📄 Traitement direct:',
+            '✅',
+            '🎉',
+            '❌',
+            '⚠️',
+            '🛑',
+        )
+        return any(token in text for token in allowed_tokens)
 
     def retranslate_ui(self):
         """Applique les traductions aux widgets enregistrés."""
-        for widget, base_text in self._translation_store:
+        for widget, text_key in self._translation_store:
             if isinstance(widget, QLineEdit):
-                # Placeholder seulement
-                if self.language == 'en':
-                    widget.setPlaceholderText(self.translations_en.get(base_text, base_text))
-                else:
-                    widget.setPlaceholderText(base_text)
+                widget.setPlaceholderText(self.tr(text_key, default=text_key))
             else:
-                if self.language == 'en':
-                    widget.setText(self.translations_en.get(base_text, base_text))
-                else:
-                    widget.setText(base_text)
+                widget.setText(self.tr(text_key, default=text_key))
+
+        self.setWindowTitle(self.tr('ui.app.title', default='B2PC - Batch Retro Games Converter'))
         # Retraduire la fenêtre de logs si ouverte en utilisant sa méthode dédiée
         if self.log_dialog:
-            self.log_dialog.apply_language(self.language, self.translations_en)
+            self.log_dialog.apply_language(self.language, self)
+        if self.settings_dialog:
+            self.settings_dialog.apply_language(self.language, self)
 
     def translate_log_message(self, message: str) -> str:
         """Remplace les fragments FR par EN en conservant emojis et chiffres."""
+        if self.language != 'en':
+            return message
+
         translated = message
-        for fr, en in self.log_translations_en.items():
-            if fr in translated:
-                translated = translated.replace(fr, en)
+        for key, fr_fragment in self.log_translations_fr.items():
+            en_fragment = self.log_translations_en.get(key)
+            if not en_fragment:
+                continue
+            if fr_fragment in translated:
+                translated = translated.replace(fr_fragment, en_fragment)
         return translated
     
     def update_button_states(self):
@@ -1230,7 +1391,7 @@ class B2PCMainWindow(QMainWindow):
     
     def select_source_folder(self):
         """Sélectionne le dossier source"""
-        folder = QFileDialog.getExistingDirectory(self, "Sélectionner le dossier source")
+        folder = QFileDialog.getExistingDirectory(self, self.tr('ui.folder.source.select_dialog', default='Sélectionner le dossier source'))
         if folder:
             self.source_folder = folder
             self.source_input.setText(folder)
@@ -1239,7 +1400,7 @@ class B2PCMainWindow(QMainWindow):
     
     def select_dest_folder(self):
         """Sélectionne le dossier destination"""
-        folder = QFileDialog.getExistingDirectory(self, "Sélectionner le dossier destination")
+        folder = QFileDialog.getExistingDirectory(self, self.tr('ui.folder.dest.select_dialog', default='Sélectionner le dossier destination'))
         if folder:
             self.dest_folder = folder
             self.dest_input.setText(folder)
@@ -1253,7 +1414,7 @@ class B2PCMainWindow(QMainWindow):
         if not self.log_dialog:
             self.log_dialog = LogDialog(self)
         # Appliquer langue actuelle aux boutons (y compris états des boutons)
-        self.log_dialog.apply_language(self.language, self.translations_en)
+        self.log_dialog.apply_language(self.language, self)
 
         # Reset contenu
         self.log_dialog.log_text.clear()
@@ -1261,16 +1422,24 @@ class B2PCMainWindow(QMainWindow):
 
         # Traduction du titre d'opération
         op_title = operation_name
-        if self.language == 'en':
-            op_title = self.translations_en.get(operation_name, operation_name)
+        op_key = self.operation_title_keys.get(operation_name)
+        if op_key:
+            op_title = self.tr(op_key, default=operation_name)
         prefix = 'Conversion - '
         self.log_dialog.setWindowTitle(f"{prefix}{op_title}")
 
         # Démarrer un nouveau worker
-        self.current_worker = WorkerThread(operation_name, self.source_folder, self.dest_folder)
+        self.current_worker = WorkerThread(
+            operation_name,
+            self.source_folder,
+            self.dest_folder,
+            delete_source_after_conversion=self.delete_source_after_conversion,
+        )
         self.log_dialog.set_worker_thread(self.current_worker)
 
+        self.update_main_progress(0, "Initialisation...")
         self.current_worker.progress_update.connect(self.log_dialog.update_progress)
+        self.current_worker.progress_update.connect(self.update_main_progress)
         self.current_worker.log_message.connect(self.log_dialog.add_log)
         self.current_worker.finished.connect(self.on_conversion_finished)
         self.current_worker.finished.connect(self.log_dialog.on_finished)
@@ -1283,20 +1452,25 @@ class B2PCMainWindow(QMainWindow):
         if not self.log_dialog:
             self.log_dialog = LogDialog(self)
         # Toujours appliquer traduction courante (titre + boutons)
-        self.log_dialog.apply_language(self.language, self.translations_en)
+        self.log_dialog.apply_language(self.language, self)
         # Ajuster titre simple si pas en cours de conversion
-        if self.language == 'en':
-            self.log_dialog.setWindowTitle(self.translations_en.get('Logs de conversion', 'Conversion logs'))
-        else:
-            self.log_dialog.setWindowTitle('Logs de conversion')
+        self.log_dialog.setWindowTitle(self.tr('ui.log.window_title', default='Logs de conversion'))
         self.log_dialog.show()
         self.log_dialog.raise_()
         self.log_dialog.activateWindow()
+
+    def open_settings_dialog(self):
+        if not self.settings_dialog:
+            self.settings_dialog = SettingsDialog(self)
+        self.settings_dialog.refresh_from_parent()
+        self.settings_dialog.apply_language(self.language, self)
+        self.settings_dialog.show()
+        self.settings_dialog.raise_()
+        self.settings_dialog.activateWindow()
     
     def on_conversion_finished(self, results):
         """Appelé quand la conversion est terminée"""
-        if self.log_dialog:
-            self.log_dialog.hide_progress()
+        self.finalize_main_progress(results)
         self.current_worker = None
     
     # Méthodes de conversion (callbacks des boutons)
@@ -1353,8 +1527,7 @@ class B2PCMainWindow(QMainWindow):
             # Afficher simplement la fenêtre de logs sans démarrer de conversion
             self.show_logs_dialog()
             if self.log_dialog:
-                msg = "Aucun fichier CHD trouvé" if self.language == 'fr' else "No CHD file found"
-                self.log_dialog.add_log(msg)
+                self.log_dialog.add_log(self.tr('ui.chdinfo.no_file', default='Aucun fichier CHD trouvé'))
             return
 
         dialog = CHDInfoDialog(self)
@@ -1366,15 +1539,25 @@ class CHDInfoDialog(QDialog):
     """Dialog pour afficher les infos des CHD."""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Infos CHD" if getattr(parent,'language','fr')=='fr' else 'CHD Info')
+        p = parent if isinstance(parent, B2PCMainWindow) else None
+        title = p.tr('ui.chdinfo.title', default='Infos CHD') if p else 'Infos CHD'
+        self.setWindowTitle(title)
         self.resize(900, 400)
         layout = QVBoxLayout(self)
         from PyQt6.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView
         self.table = QTableWidget(0, 6)
-        headers_fr = ["Fichier","Version","Type","Taille originale","Taille compressée","Ratio"]
-        headers_en = ["File","Version","Type","Original size","Compressed size","Ratio"]
-        lang = getattr(parent,'language','fr')
-        self.table.setHorizontalHeaderLabels(headers_fr if lang=='fr' else headers_en)
+        if p:
+            headers = [
+                p.tr('ui.chdinfo.header.file', default='Fichier'),
+                p.tr('ui.chdinfo.header.version', default='Version'),
+                p.tr('ui.chdinfo.header.type', default='Type'),
+                p.tr('ui.chdinfo.header.original_size', default='Taille originale'),
+                p.tr('ui.chdinfo.header.compressed_size', default='Taille compressée'),
+                p.tr('ui.chdinfo.header.ratio', default='Ratio')
+            ]
+        else:
+            headers = ["Fichier", "Version", "Type", "Taille originale", "Taille compressée", "Ratio"]
+        self.table.setHorizontalHeaderLabels(headers)
         header = self.table.horizontalHeader()
         if header:
             header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
@@ -1385,7 +1568,7 @@ class CHDInfoDialog(QDialog):
                     self.table.setColumnWidth(i, w)
             header.setStretchLastSection(False)
         layout.addWidget(self.table)
-        btn_close = QPushButton("Fermer" if lang=='fr' else 'Close')
+        btn_close = QPushButton(p.tr('ui.common.close', default='Fermer') if p else 'Fermer')
         btn_close.clicked.connect(self.accept)
         layout.addWidget(btn_close)
 

@@ -40,6 +40,8 @@ class XboxPatchHandler(ConversionHandler):
                         patched += 1
                         self.log(f"🔧 ISO Xbox patché : {iso_file.name}")
                         self._cleanup_xbox_temp_files(dest_path, iso_file.name)
+                        if extract_type is None:
+                            self.delete_source_after_success(iso_file)
                     else:
                         errors += 1
                         self.log(f"❌ Échec patch Xbox : {iso_file.name}")

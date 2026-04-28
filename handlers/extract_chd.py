@@ -89,6 +89,8 @@ class ExtractChdHandler(ConversionHandler):
                     if self.run_tool("chdman.exe", args, show_output=True):
                         extracted += 1
                         self.log(f"✅ Extrait : {chd_file.name} → {iso_file.name}")
+                        if extract_type is None:
+                            self.delete_source_after_success(chd_file)
                     else:
                         errors += 1
                         self.log(f"❌ Échec extraction DVD : {chd_file.name}")
@@ -107,6 +109,8 @@ class ExtractChdHandler(ConversionHandler):
                     if self.run_tool("chdman.exe", args, show_output=True):
                         extracted += 1
                         self.log(f"✅ Extrait : {chd_file.name} → {bin_file.name} / {cue_file.name}")
+                        if extract_type is None:
+                            self.delete_source_after_success(chd_file)
                     else:
                         errors += 1
                         self.log(f"❌ Échec extraction CD : {chd_file.name}")

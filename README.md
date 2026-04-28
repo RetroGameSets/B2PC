@@ -9,7 +9,7 @@
 Batch tool to prepare and optimize retro game collections with a bilingual PyQt6 interface (FR / EN).
 
 ## 🤝 Support
-Discord: https://discord.gg/Vph9jwg3VV
+Discord: https://discord.gg/chz59Z9Bhj
 
 ## ✨ Features
 - ISO / CUE → CHD (auto CD / DVD detection)
@@ -43,33 +43,4 @@ Logs are stored in `LOG/` (one file per operation). Export available from the lo
 FR / EN switch in footer. Buttons and log fragments are retranslated live.
 
 ## 📋 Changelog
-
-### v3.6.0.5
-- Automatic CD/DVD detection for CHD extraction → uses `chdman info` then `extractcd` or `extractdvd`.
-- Button renamed: "Extraire CHD" (FR) / "Extract CHD" (EN).
-- Extended FR/EN translations (log buttons, error fragments, CHD types).
-
-### v3.6.0.4
-- CHD Info: fast display without starting conversion when no file present.
-- Log dialog dynamically translatable (Stop / Save / Close / Open folder buttons).
-
-### v3.6.0.3
-- Non‑recursive policy: only root-level files + archives processed.
-- SquashFS adjustments (non‑recursive detection & extraction).
-
-### v3.6.0.2
-- Stabilized `gensquashfs` / `unsquashfs` execution (DLL context, arg order, `--force`).
-- Log improvements (sanitized filenames, emoji cleanup for file output).
-
-### v3.6.0.1
-- Improved stop logic: track running process + clean termination.
-- Added dynamic translation of log fragments.
-
-### Previous versions (2.x - 3.5)
-- Real‑time progress via stdout parsing.
-- Archive extract‑on‑the‑fly (disk space savings).
-- Dark / light mode.
-- Xbox ISO patch + temp cleanup.
-
----
-For full history: see Git tags or earlier commits.
+https://github.com/RetroGameSets/B2PC/releases

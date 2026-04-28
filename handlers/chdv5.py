@@ -74,6 +74,8 @@ class ChdV5Handler(ConversionHandler):
                     if self.run_tool("chdman.exe", args, show_output=True):
                         converted += 1
                         self.log(f"✅ OK : {input_file.name} → {chd_file.name}")
+                        if extract_type is None:
+                            self.delete_source_after_success(input_file)
                     else:
                         errors += 1
                         self.log(f"❌ Échec : {input_file.name}")

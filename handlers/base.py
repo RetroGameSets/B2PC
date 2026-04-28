@@ -19,6 +19,7 @@ class ConversionHandler:
         self.temp_extract_folder = None
         self.should_stop = False  # Flag pour arrêter la conversion
         self.current_process = None  # Référence au processus en cours
+        self.delete_source_after_conversion = False
     def validate_tools(self) -> bool:
         """Valide que tous les outils requis sont présents (compatibilité PyInstaller)"""
         from main import resource_path
@@ -332,3 +333,77 @@ class ConversionHandler:
                 self.log(f"⚠️ Erreur nettoyage dossier temporaire: {str(e)}")
             finally:
                 self.temp_extract_folder = None
+
+    def delete_source_after_success(self, source_item: Union[str, Path]) -> bool:
+        """Supprime la source originale après succès si l'option est activée."""
+        if not self.delete_source_after_conversion:
+            return False
+
+        source_path = Path(source_item)
+        if not source_path.exists():
+            return False
+
+        if source_path.is_dir():
+            self.log(f"ℹ️ Suppression ignorée pour le dossier source: {source_path.name}")
+            return False
+
+        suffix = source_path.suffix.lower()
+        if suffix == ".cue":
+            return self._delete_cue_bundle(source_path)
+        if suffix == ".gdi":
+            return self._delete_gdi_bundle(source_path)
+
+        try:
+            source_path.unlink()
+            self.log(f"🗑️ Source supprimée: {source_path.name}")
+            return True
+        except Exception as e:
+            self.log(f"⚠️ Impossible de supprimer {source_path.name}: {e}")
+            return False
+
+    def _delete_cue_bundle(self, cue_path: Path) -> bool:
+        targets = [cue_path]
+        try:
+            content = cue_path.read_text(encoding='utf-8', errors='ignore').splitlines()
+            for line in content:
+                match = re.search(r'FILE\s+"([^"]+)"', line, re.IGNORECASE)
+                if not match:
+                    match = re.search(r"FILE\s+([^\s]+)", line, re.IGNORECASE)
+                if match:
+                    referenced = (cue_path.parent / match.group(1).strip('"')).resolve()
+                    if referenced.exists() and referenced not in targets:
+                        targets.append(referenced)
+        except Exception as e:
+            self.log(f"⚠️ Lecture CUE incomplète ({cue_path.name}): {e}")
+
+        return self._delete_files(targets, cue_path.name)
+
+    def _delete_gdi_bundle(self, gdi_path: Path) -> bool:
+        targets = [gdi_path]
+        try:
+            lines = gdi_path.read_text(encoding='utf-8', errors='ignore').splitlines()
+            for line in lines[1:]:
+                tokens = re.findall(r'"[^"]*"|\S+', line)
+                if len(tokens) >= 5:
+                    filename = tokens[4].strip('"')
+                    referenced = (gdi_path.parent / filename).resolve()
+                    if referenced.exists() and referenced not in targets:
+                        targets.append(referenced)
+        except Exception as e:
+            self.log(f"⚠️ Lecture GDI incomplète ({gdi_path.name}): {e}")
+
+        return self._delete_files(targets, gdi_path.name)
+
+    def _delete_files(self, targets: List[Path], label: str) -> bool:
+        deleted_any = False
+        for target in targets:
+            try:
+                if target.exists() and target.is_file():
+                    target.unlink()
+                    deleted_any = True
+                    self.log(f"🗑️ Source supprimée: {target.name}")
+            except Exception as e:
+                self.log(f"⚠️ Impossible de supprimer {target.name}: {e}")
+        if deleted_any:
+            self.log(f"✅ Sources nettoyées après conversion: {label}")
+        return deleted_any

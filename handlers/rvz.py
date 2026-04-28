@@ -108,6 +108,8 @@ class RvzHandler(ConversionHandler):
 
                     if self._convert_file(input_file, dest_path):
                         converted += 1
+                        if extract_type is None:
+                            self.delete_source_after_success(input_file)
                     else:
                         errors += 1
 

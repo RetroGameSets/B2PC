@@ -146,6 +146,8 @@ class SquashFSHandler(ConversionHandler):
                     if self.run_tool("unsquashfs.exe", args):
                         extracted += 1
                         self.log(f"📂 Extrait : {squashfs_file.name} → {extract_dir.name}")
+                        if extract_type is None:
+                            self.delete_source_after_success(squashfs_file)
                     else:
                         errors += 1
                         self.log(f"❌ Échec extraction : {squashfs_file.name}")

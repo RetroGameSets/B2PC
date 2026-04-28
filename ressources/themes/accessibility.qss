@@ -1,0 +1,141 @@
+/* Accessibility high-contrast theme for B2PC */
+QMainWindow {
+  background-color: #000000;
+  color: #FFFFFF;
+}
+QWidget {
+  background-color: #000000;
+  color: #FFFFFF;
+}
+QLineEdit {
+  background-color: #000000;
+  border: 2px solid #FFFFFF;
+  border-radius: 4px;
+  padding: 8px;
+  color: #FFFFFF;
+}
+QLineEdit:read-only {
+  background-color: #000000;
+}
+QPushButton {
+  background-color: #000000;
+  color: #FFFFFF;
+  border: 2px solid #FFFFFF;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+QPushButton:hover {
+  background-color: #111111;
+}
+QPushButton#settingsButton {
+  min-width: 120px;
+  padding: 8px 14px;
+}
+QPushButton:disabled {
+  background-color: #000000;
+  color: #BFBFBF;
+  border: 2px solid #BFBFBF;
+}
+QPushButton#stopButton {
+  background-color: #000000;
+  color: #FFFFFF;
+  border: 2px solid #FFFFFF;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+QPushButton#stopButton:hover {
+  background-color: #111111;
+}
+QPushButton#stopButton:disabled {
+  background-color: #000000;
+  color: #BFBFBF;
+  border: 2px solid #BFBFBF;
+}
+QLabel {
+  color: #FFFFFF;
+}
+QLabel#logoLabel {
+  font-size: 48px;
+  min-height: 58px;
+  font-weight: bold;
+  color: #FFFFFF;
+  margin: 10px;
+}
+QLabel#buttonGroupTitle {
+  font-size: 18px;
+  min-height: 28px;
+  font-weight: bold;
+  color: #FFFFFF;
+  margin-bottom: 10px;
+}
+QLabel#settingsTitle {
+  font-size: 20px;
+  font-weight: bold;
+  color: #FFFFFF;
+}
+QLabel#sourceLabel, QLabel#destLabel {
+  font-size: 16px;
+  min-height: 22px;
+  font-weight: 600;
+  color: #FFFFFF;
+}
+QPushButton#conversionButton.green,
+QPushButton#conversionButton.yellow,
+QPushButton#conversionButton.purple {
+  background-color: #000000;
+  color: #FFFFFF;
+  border: 2px solid #FFFFFF;
+}
+QPushButton#conversionButton.green:hover,
+QPushButton#conversionButton.yellow:hover,
+QPushButton#conversionButton.purple:hover {
+  background-color: #111111;
+}
+QPushButton#conversionButton:disabled,
+QPushButton#conversionButton.green:disabled,
+QPushButton#conversionButton.yellow:disabled,
+QPushButton#conversionButton.purple:disabled {
+  background-color: #000000;
+  color: #BFBFBF;
+  border: 2px solid #BFBFBF;
+  opacity: 1;
+}
+QProgressBar {
+  border: 2px solid #FFFFFF;
+  border-radius: 4px;
+  text-align: center;
+  height: 25px;
+  color: #FFFFFF;
+  background-color: #000000;
+}
+QProgressBar::chunk {
+  background-color: #FFFFFF;
+}
+QDialog {
+  background-color: #000000;
+  color: #FFFFFF;
+}
+QTextEdit {
+  background-color: #000000;
+  border: 2px solid #FFFFFF;
+  border-radius: 6px;
+  padding: 10px;
+  font-family: 'Consolas', monospace;
+  color: #FFFFFF;
+}
+QComboBox {
+  background-color: #000000;
+  color: #FFFFFF;
+  border: 2px solid #FFFFFF;
+  border-radius: 4px;
+  padding: 6px;
+}
+QCheckBox {
+  color: #FFFFFF;
+}
+QScrollArea {
+  background-color: #000000;
+  border: 1px solid #FFFFFF;
+}
