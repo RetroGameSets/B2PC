@@ -59,7 +59,7 @@ class ExtractChdHandler(ConversionHandler):
             self.progress((i / len(source_files)) * 100, f"Traitement {i+1}/{len(source_files)}")
             if extract_type is None:
                 chd_files = [source_item]
-                self.log(f"📄 Traitement direct: {source_item.name}")
+                self.log(f"📄 Traitement: {source_item.name}")
             elif extract_type == "archive":
                 self.log(f"📦 Extraction de l'archive: {source_item.name}")
                 try:

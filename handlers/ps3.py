@@ -678,7 +678,7 @@ class Ps3DecryptHandler(ConversionHandler):
 
                 if extract_type is None:
                     iso_files = [source_item]
-                    self.log(f"📄 Traitement direct: {source_item.name}")
+                    self.log(f"📄 Traitement: {source_item.name}")
                 elif extract_type == "archive":
                     archive_name = source_item.name
                     self.log(f"📦 Extraction archive: {archive_name}")

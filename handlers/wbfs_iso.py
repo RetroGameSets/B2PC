@@ -479,7 +479,7 @@ class WbfsIsoHandler(ConversionHandler):
 
                 if extract_type is None:
                     input_files = [source_item]
-                    self.log(f"📄 Traitement direct: {source_item.name}")
+                    self.log(f"📄 Traitement: {source_item.name}")
                 elif extract_type == "archive":
                     self.log(f"📦 Extraction de l'archive: {source_item.name}")
                     try:

@@ -180,6 +180,9 @@
     "log.100": "Extracción de DVD fallida",
     "log.101": "Extracción de CD fallida",
     "log.102": "Extraído",
-    "log.103": "Ningún archivo CHD encontrado"
+    "log.103": "Ningún archivo CHD encontrado",
+    "log.104": "Archivo:",
+    "log.105": "Procesamiento:",
+    "log.106": "Procesamiento"
   }
 }

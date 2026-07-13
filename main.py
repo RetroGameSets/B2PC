@@ -1,4 +1,4 @@
-APP_VERSION = "3.6.5.0"
+APP_VERSION = "3.6.6.0"
 UPDATE_URL = "https://raw.githubusercontent.com/RetroGameSets/B2PC/refs/heads/main/ressources/last_version.json"
 DISCORD_URL = "https://discord.gg/chz59Z9Bhj"
 
@@ -12,8 +12,8 @@ from PyQt6.QtWidgets import (
     QGridLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QProgressBar,
     QFileDialog, QDialog, QComboBox, QCheckBox
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QFont, QCursor
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
+from PyQt6.QtGui import QFont, QCursor, QPixmap
 from typing import Optional, Dict, Any
 import logging
 from datetime import datetime
@@ -205,7 +205,7 @@ class WorkerThread(QThread):
                     self.handler.direction = "iso_to_rvz"
             elif "wSquashFS" in self.operation:
                 self.handler = SquashFSHandler(str(tools_path), log_callback, progress_callback)
-            elif "Xbox" in self.operation:
+            elif "[XBOX]" in self.operation:
                 self.handler = XboxPatchHandler(str(tools_path), log_callback, progress_callback)
             elif "PS3" in self.operation:
                 self.handler = Ps3DecryptHandler(str(tools_path), log_callback, progress_callback)
@@ -356,37 +356,26 @@ class LogDialog(QDialog):
     def add_log(self, message):
         """Ajoute un message au log avec coloration"""
         timestamp = datetime.now().strftime("%H:%M:%S")
+        raw_message = str(message or "")
 
         parent = self.parent()
         if parent and isinstance(parent, B2PCMainWindow):
-            if not parent.should_display_log_message(message):
+            if not parent.should_display_log_message(raw_message):
                 return
 
-        # Traduction dynamique si interface en anglais
+        # Traduction dynamique si interface non FR
         # Vérification stricte du type pour éviter l'avertissement de l'analyseur statique
-        if parent and isinstance(parent, B2PCMainWindow) and parent.language == 'en':
+        if parent and isinstance(parent, B2PCMainWindow) and parent.language != 'fr':
             # Appel direct garanti par isinstance
-            message = parent.translate_log_message(message)  # type: ignore[attr-defined]
+            message = parent.translate_log_message(raw_message)  # type: ignore[attr-defined]
 
         is_dark_mode = bool(parent.dark_mode) if parent and isinstance(parent, B2PCMainWindow) else False
         is_accessibility_mode = bool(getattr(parent, 'theme_mode', '') == 'accessibility') if parent and isinstance(parent, B2PCMainWindow) else False
-        
-        # En mode accessibilité: monochrome (pas de codage couleur par type de message).
-        if is_accessibility_mode:
-            color = "#FFFFFF"
-        elif "❌" in message or "Erreur" in message or "Échec" in message:
-            color = "#dc2626"  # Rouge
-        elif "⚠️" in message or "erreur(s)" in message or "avec erreurs" in message:
-            color = "#eab308"  # Jaune
-        elif "✅" in message or "Succès" in message or "terminée" in message:
-            color = "#16a34a"  # Vert
-        elif "⏳" in message or "🔄" in message or "Traitement" in message:
-            color = "#eab308"  # Jaune
-        elif "🎉" in message or "Statistiques" in message:
-            color = "#8b5cf6"  # Violet
+
+        if parent and isinstance(parent, B2PCMainWindow):
+            color = parent.get_log_message_color(raw_message, str(message), is_dark_mode, is_accessibility_mode)
         else:
-            # Les messages standards doivent rester lisibles en thème sombre.
-            color = "#cbd5e1" if is_dark_mode else "#374151"
+            color = "#FFFFFF" if is_accessibility_mode else ("#cbd5e1" if is_dark_mode else "#374151")
         
         formatted_message = f'<span style="color: {color};">[{timestamp}] {message}</span><br>'
         self.log_text.insertHtml(formatted_message)
@@ -394,6 +383,10 @@ class LogDialog(QDialog):
     
     def update_progress(self, value, text):
         """Met à jour la barre de progression"""
+        parent = self.parent()
+        if parent and isinstance(parent, B2PCMainWindow) and parent.language != 'fr':
+            text = parent.translate_log_message(str(text or ""))
+
         self.progress_bar.setVisible(True)
         display_value = int(value)
         match = re.search(r"(\d+)\s*/\s*(\d+)", text or "")
@@ -540,6 +533,9 @@ class SettingsDialog(QDialog):
         self.language_combo = QComboBox()
         self.language_combo.addItem("FR", "fr")
         self.language_combo.addItem("EN", "en")
+        self.language_combo.addItem("DE", "de")
+        self.language_combo.addItem("ES", "es")
+        self.language_combo.addItem("IT", "it")
         self.language_combo.currentIndexChanged.connect(self.on_language_changed)
         language_row.addWidget(self.language_combo)
         language_row.addStretch()
@@ -626,7 +622,7 @@ class SettingsDialog(QDialog):
     def on_language_changed(self):
         if self.main_window:
             data = self.language_combo.currentData()
-            if data in ('fr', 'en'):
+            if data in ('fr', 'en', 'de', 'es', 'it'):
                 self.main_window.set_language(data)
 
     def open_support(self):
@@ -651,10 +647,9 @@ class B2PCMainWindow(QMainWindow):
         self.screen_log_level = 'error_only'
         self._settings = {}
         self._translation_store = []  # Liste de tuples (widget, i18n_key)
-        self.translations_fr: Dict[str, str] = {}
-        self.translations_en: Dict[str, str] = {}
-        self.log_translations_fr: Dict[str, str] = {}
-        self.log_translations_en: Dict[str, str] = {}
+        self.supported_languages = ('fr', 'en', 'de', 'es', 'it')
+        self.ui_translations: Dict[str, Dict[str, str]] = {}
+        self.log_translations: Dict[str, Dict[str, str]] = {}
         self.operation_title_keys: Dict[str, str] = {
             "Conversion ISO/CUE/GDI > CHD": "ui.operation.chd_convert",
             "Extraire CHD": "ui.operation.extract_chd",
@@ -674,7 +669,8 @@ class B2PCMainWindow(QMainWindow):
         # Charger les paramètres persistants puis configuration UI
         self._settings = self.load_settings()
         if isinstance(self._settings, dict):
-            self.language = self._settings.get('language', 'fr')
+            loaded_language = str(self._settings.get('language', 'fr') or '').strip().lower()
+            self.language = loaded_language if loaded_language in self.supported_languages else 'fr'
             loaded_theme_mode = str(self._settings.get('theme_mode', '') or '').strip().lower()
             if loaded_theme_mode in ('light', 'dark', 'accessibility'):
                 self.theme_mode = loaded_theme_mode
@@ -692,7 +688,7 @@ class B2PCMainWindow(QMainWindow):
         self.restore_folder_settings()
         self.apply_styles()
         # Appliquer la langue chargée
-        if self.language == 'en':
+        if self.language != 'fr':
             self.retranslate_ui()
 
     def load_translation_file(self, language: str) -> Dict[str, Any]:
@@ -710,24 +706,21 @@ class B2PCMainWindow(QMainWindow):
         return {}
 
     def load_translations(self):
-        """Charge les chaînes UI et logs depuis fr.json/en.json."""
-        fr_data = self.load_translation_file('fr')
-        en_data = self.load_translation_file('en')
+        """Charge les chaînes UI et logs pour toutes les langues supportées."""
+        self.ui_translations = {}
+        self.log_translations = {}
 
-        fr_ui = fr_data.get('ui', {}) if isinstance(fr_data, dict) else {}
-        en_ui = en_data.get('ui', {}) if isinstance(en_data, dict) else {}
-        fr_logs = fr_data.get('log_fragments', {}) if isinstance(fr_data, dict) else {}
-        en_logs = en_data.get('log_fragments', {}) if isinstance(en_data, dict) else {}
-
-        self.translations_fr = fr_ui if isinstance(fr_ui, dict) else {}
-        self.translations_en = en_ui if isinstance(en_ui, dict) else {}
-        self.log_translations_fr = fr_logs if isinstance(fr_logs, dict) else {}
-        self.log_translations_en = en_logs if isinstance(en_logs, dict) else {}
+        for language in self.supported_languages:
+            data = self.load_translation_file(language)
+            ui_data = data.get('ui', {}) if isinstance(data, dict) else {}
+            log_data = data.get('log_fragments', {}) if isinstance(data, dict) else {}
+            self.ui_translations[language] = ui_data if isinstance(ui_data, dict) else {}
+            self.log_translations[language] = log_data if isinstance(log_data, dict) else {}
 
     def tr(self, key: str, language: Optional[str] = None, default: Optional[str] = None) -> str:
         lang = language or self.language
-        table = self.translations_en if lang == 'en' else self.translations_fr
-        fallback = self.translations_fr
+        table = self.ui_translations.get(lang, {})
+        fallback = self.ui_translations.get('fr', {})
 
         if key in table:
             return str(table[key])
@@ -843,8 +836,8 @@ class B2PCMainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setSpacing(20)
-        main_layout.setContentsMargins(40, 20, 40, 20)
+        main_layout.setSpacing(16)
+        main_layout.setContentsMargins(30, 12, 30, 12)
 
         # Header avec logo et description
         self.create_header(main_layout)
@@ -852,11 +845,11 @@ class B2PCMainWindow(QMainWindow):
         # Section des dossiers
         self.create_folder_section(main_layout)
 
-        # Barre de progression globale (toujours visible dans la fenêtre principale)
-        self.create_main_progress_section(main_layout)
-
         # Section des boutons de conversion
         self.create_conversion_section(main_layout)
+
+        # Barre de progression globale en bas pour ne pas réduire la zone des boutons
+        self.create_main_progress_section(main_layout)
 
         # Footer
         self.create_footer(main_layout)
@@ -871,20 +864,40 @@ class B2PCMainWindow(QMainWindow):
         self.apply_styles()
     
     def create_header(self, parent_layout):
-        """Crée la section header avec logo et descriptions"""
+        """Crée la section header avec logo SVG et descriptions"""
         header_layout = QVBoxLayout()
         header_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header_layout.setContentsMargins(0, 0, 0, 0)
         
-        # Logo (placeholder)
-        logo_label = QLabel(self.tr('ui.header.logo', default='🎮 B2PC'))
+        # Logo SVG
+        logo_label = QLabel()
         logo_label.setObjectName("logoLabel")
         logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo_label.setFixedHeight(88)
+        
+        # Charger l'image SVG
+        logo_path = resource_path("ressources/images/b2pc_logo.svg")
+        if os.path.exists(logo_path):
+            pixmap = QPixmap(logo_path)
+            # Taille stable côté UI; l'agrandissement est géré dans le SVG lui-même.
+            if not pixmap.isNull():
+                scaled_pixmap = pixmap.scaled(
+                    300,
+                    88,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                logo_label.setPixmap(scaled_pixmap)
+            else:
+                # Fallback si SVG ne charge pas
+                logo_label.setText(self.tr('ui.header.logo', default='🎮 B2PC'))
+                logo_label.setFont(QFont("Arial", 24, QFont.Weight.Bold))
+        else:
+            # Fallback si le fichier n'existe pas
+            logo_label.setText(self.tr('ui.header.logo', default='🎮 B2PC'))
+            logo_label.setFont(QFont("Arial", 24, QFont.Weight.Bold))
+        
         header_layout.addWidget(logo_label)
-        self._translation_store.append((logo_label, 'ui.header.logo'))
-        
-        # Réduction des marges
-        header_layout.setContentsMargins(0, 10, 0, 10)
-        
         parent_layout.addLayout(header_layout)
     
     def create_folder_section(self, parent_layout):
@@ -1008,6 +1021,8 @@ class B2PCMainWindow(QMainWindow):
     def create_main_progress_section(self, parent_layout):
         """Crée la barre de progression principale de l'application."""
         self.main_progress_bar = QProgressBar()
+        self.main_progress_bar.setFixedHeight(24)
+        self.main_progress_bar.setTextVisible(True)
         self.main_progress_bar.setVisible(False)
         self.main_progress_bar.setValue(0)
         self.main_progress_bar.setFormat("")
@@ -1017,6 +1032,10 @@ class B2PCMainWindow(QMainWindow):
         """Met à jour la progression affichée dans la fenêtre principale."""
         if not hasattr(self, 'main_progress_bar'):
             return
+
+        if self.language != 'fr':
+            text = self.translate_log_message(str(text or ""))
+
         safe_value = int(value)
         match = re.search(r"(\d+)\s*/\s*(\d+)", text or "")
         if match:
@@ -1271,7 +1290,7 @@ class B2PCMainWindow(QMainWindow):
         self.save_settings()
 
     def set_language(self, language_code: str):
-        if language_code not in ('fr', 'en'):
+        if language_code not in self.supported_languages:
             return
         self.language = language_code
         self.retranslate_ui()
@@ -1298,15 +1317,18 @@ class B2PCMainWindow(QMainWindow):
             return True
 
         text = str(message or '')
-        allowed_tokens = (
-            '📄 Fichier:',
-            '📄 Traitement direct:',
-            '✅',
-            '🎉',
-            '❌',
-            '⚠️',
-            '🛑',
-        )
+        allowed_tokens = ['✅', '🎉', '❌', '⚠️', '🛑']
+        for language in self.supported_languages:
+            fragments = self.log_translations.get(language, {})
+            file_token = fragments.get('log.104')
+            processing_token = fragments.get('log.105')
+            tools_present_token = fragments.get('log.020')
+            if file_token:
+                allowed_tokens.append(f"📄 {file_token}")
+            if processing_token:
+                allowed_tokens.append(f"📄 {processing_token}")
+            if tools_present_token:
+                allowed_tokens.append(str(tools_present_token))
         return any(token in text for token in allowed_tokens)
 
     def retranslate_ui(self):
@@ -1325,18 +1347,81 @@ class B2PCMainWindow(QMainWindow):
             self.settings_dialog.apply_language(self.language, self)
 
     def translate_log_message(self, message: str) -> str:
-        """Remplace les fragments FR par EN en conservant emojis et chiffres."""
-        if self.language != 'en':
+        """Remplace les fragments FR par la langue active en conservant emojis et chiffres."""
+        if self.language == 'fr':
             return message
 
+        source_fragments = self.log_translations.get('fr', {})
+        target_fragments = self.log_translations.get(self.language, {})
         translated = message
-        for key, fr_fragment in self.log_translations_fr.items():
-            en_fragment = self.log_translations_en.get(key)
-            if not en_fragment:
+        for key, fr_fragment in source_fragments.items():
+            target_fragment = target_fragments.get(key)
+            if not target_fragment:
                 continue
             if fr_fragment in translated:
-                translated = translated.replace(fr_fragment, en_fragment)
+                translated = translated.replace(fr_fragment, target_fragment)
         return translated
+
+    def detect_log_fragment_key(self, message: str) -> Optional[str]:
+        """Retourne la clé log.xxx détectée dans un message en se basant sur les fragments i18n."""
+        text = str(message or "")
+        if not text:
+            return None
+
+        for language in self.supported_languages:
+            fragments = self.log_translations.get(language, {})
+            for key, fragment in fragments.items():
+                if fragment and str(fragment) in text:
+                    return key
+        return None
+
+    def get_log_message_color(self, raw_message: str, display_message: str, is_dark_mode: bool, is_accessibility_mode: bool) -> str:
+        """Détermine la couleur d'un log d'abord par clé i18n, puis par fallback texte/emoji."""
+        if is_accessibility_mode:
+            return "#FFFFFF"
+
+        key = self.detect_log_fragment_key(raw_message)
+
+        success_keys = {
+            'log.008', 'log.016', 'log.018', 'log.020', 'log.027', 'log.048', 'log.049', 'log.052',
+            'log.057', 'log.058', 'log.059', 'log.070', 'log.071', 'log.073', 'log.076', 'log.081',
+            'log.091', 'log.093', 'log.094', 'log.095', 'log.098', 'log.102'
+        }
+        warning_keys = {
+            'log.010', 'log.017', 'log.021', 'log.028', 'log.050', 'log.051', 'log.066', 'log.067',
+            'log.068', 'log.069', 'log.072', 'log.074', 'log.077', 'log.086'
+        }
+        error_keys = {
+            'log.009', 'log.012', 'log.019', 'log.023', 'log.024', 'log.025', 'log.061', 'log.062',
+            'log.063', 'log.064', 'log.075', 'log.078', 'log.083', 'log.084', 'log.092', 'log.096',
+            'log.099', 'log.100', 'log.101'
+        }
+        progress_keys = {
+            'log.001', 'log.029', 'log.033', 'log.041', 'log.043', 'log.046', 'log.047', 'log.060',
+            'log.079', 'log.080', 'log.085', 'log.087'
+        }
+
+        if key in error_keys:
+            return "#dc2626"  # Rouge
+        if key in warning_keys:
+            return "#eab308"  # Jaune
+        if key in success_keys:
+            return "#16a34a"  # Vert
+        if key in progress_keys:
+            return "#eab308"  # Jaune
+
+        text = str(display_message or "")
+        if "❌" in text or "Erreur" in text or "Échec" in text:
+            return "#dc2626"
+        if "⚠️" in text or "erreur(s)" in text or "avec erreurs" in text:
+            return "#eab308"
+        if "✅" in text or "Succès" in text or "terminée" in text:
+            return "#16a34a"
+        if "⏳" in text or "🔄" in text or "Traitement" in text:
+            return "#eab308"
+        if "🎉" in text or "Statistiques" in text:
+            return "#8b5cf6"
+        return "#cbd5e1" if is_dark_mode else "#374151"
     
     def update_button_states(self):
         """Met à jour l'état des boutons selon la sélection des dossiers"""
@@ -1381,7 +1466,7 @@ class B2PCMainWindow(QMainWindow):
             if central_widget:
                 layout = central_widget.layout()
                 if layout:
-                    layout.setContentsMargins(margin, 20, margin, 20)
+                    layout.setContentsMargins(margin, 12, margin, 12)
         except Exception:
             pass  # Ignorer les erreurs de layout
         
