@@ -103,7 +103,7 @@ class WbfsIsoHandler(ConversionHandler):
                 elif ext in archive_ext:
                     add_item(entry, "archive")
 
-        return sorted(items, key=lambda x: str(x[0]).lower())
+        return self.filter_selected_sources(sorted(items, key=lambda x: str(x[0]).lower()))
 
     def _allowed_extensions(self) -> Tuple[str, ...]:
         if self.direction == "iso_to_wbfs":

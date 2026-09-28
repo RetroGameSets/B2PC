@@ -1,4 +1,4 @@
-APP_VERSION = "3.6.6.0"
+APP_VERSION = "3.6.7.0"
 UPDATE_URL = "https://raw.githubusercontent.com/RetroGameSets/B2PC/refs/heads/main/ressources/last_version.json"
 DISCORD_URL = "https://discord.gg/chz59Z9Bhj"
 
@@ -10,7 +10,8 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QGridLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QProgressBar,
-    QFileDialog, QDialog, QComboBox, QCheckBox
+    QFileDialog, QDialog, QComboBox, QCheckBox, QListWidget, QListWidgetItem,
+    QMessageBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
 from PyQt6.QtGui import QFont, QCursor, QPixmap
@@ -36,6 +37,63 @@ def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path) # type: ignore
     return os.path.join(os.path.abspath("."), relative_path)
+
+def create_conversion_handler(operation, tools_path, log_callback, progress_callback):
+    if operation == "Conversion ISO/CUE/GDI > CHD":
+        return ChdV5Handler(str(tools_path), log_callback, progress_callback)
+    if any(key in operation for key in ("Extraire CHD", "Extract CHD")):
+        return ExtractChdHandler(str(tools_path), log_callback, progress_callback)
+    if "Merge BIN/CUE" in operation:
+        return MergeBinCueHandler(str(tools_path), log_callback, progress_callback)
+    if "RVZ" in operation and "WBFS" not in operation:
+        handler = RvzHandler(str(tools_path), log_callback, progress_callback)
+        handler.direction = "rvz_to_iso" if "[GC/WII] RVZ > ISO" in operation else "iso_to_rvz"
+        return handler
+    if "wSquashFS" in operation:
+        return SquashFSHandler(str(tools_path), log_callback, progress_callback)
+    if "[XBOX]" in operation:
+        return XboxPatchHandler(str(tools_path), log_callback, progress_callback)
+    if "PS3" in operation:
+        return Ps3DecryptHandler(str(tools_path), log_callback, progress_callback)
+    if any(key in operation for key in ("[WII] ISO > WBFS", "[WII] WBFS > ISO", "[WII] WBFS > RVZ", "[WII] WBFS <> ISO")):
+        handler = WbfsIsoHandler(str(tools_path), log_callback, progress_callback)
+        if "[WII] ISO > WBFS" in operation:
+            handler.direction = "iso_to_wbfs"
+        elif "[WII] WBFS > RVZ" in operation:
+            handler.direction = "wbfs_to_rvz"
+        elif "[WII] WBFS > ISO" in operation:
+            handler.direction = "wbfs_to_iso"
+        return handler
+    raise ValueError(f"Handler non disponible pour: {operation}")
+
+def collect_conversion_sources(operation, source_folder):
+    tools_path = Path("ressources")
+    no_op = lambda *args: None
+    handler = create_conversion_handler(operation, tools_path, no_op, no_op)
+    handler.source_folder = str(source_folder)
+
+    if isinstance(handler, SquashFSHandler):
+        if "Compression" in operation:
+            return [Path(path) for path in handler.get_all_source_files()]
+        items = handler.get_all_source_files_extract([".wsquashfs", ".squashfs"])
+    elif isinstance(handler, WbfsIsoHandler):
+        items = handler._collect_source_items()
+    elif isinstance(handler, MergeBinCueHandler):
+        source_handler = ChdV5Handler(str(tools_path), no_op, no_op)
+        source_handler.source_folder = str(source_folder)
+        items = source_handler.get_multiple_source_files([".iso", ".cue", ".gdi"])
+    elif isinstance(handler, ChdV5Handler):
+        items = handler.get_multiple_source_files([".iso", ".cue", ".gdi"])
+    elif isinstance(handler, ExtractChdHandler):
+        items = handler.get_all_source_files(".chd")
+    elif isinstance(handler, RvzHandler):
+        items = handler.get_all_source_files(handler._source_extension())
+    elif isinstance(handler, (XboxPatchHandler, Ps3DecryptHandler)):
+        items = handler.get_all_source_files(".iso")
+    else:
+        items = []
+
+    return [Path(item[0] if isinstance(item, tuple) else item) for item in items]
 
 def check_for_update():
     try:
@@ -74,12 +132,13 @@ class WorkerThread(QThread):
     log_message = pyqtSignal(str)
     finished = pyqtSignal(dict)
 
-    def __init__(self, operation, source_folder, dest_folder, delete_source_after_conversion=False):
+    def __init__(self, operation, source_folder, dest_folder, delete_source_after_conversion=False, selected_sources=None):
         super().__init__()
         self.operation = operation
         self.source_folder = source_folder
         self.dest_folder = dest_folder
         self.delete_source_after_conversion = delete_source_after_conversion
+        self.selected_sources = set(selected_sources) if selected_sources is not None else None
         self.log_file = None
         self.handler: Optional[ConversionHandler] = None  # Référence au handler pour pouvoir l'arrêter
         self.setup_logging()
@@ -180,8 +239,6 @@ class WorkerThread(QThread):
         """Exécute une vraie conversion avec les handlers"""
         self.progress_update.emit(10, "Initialisation des outils")
         
-        # Sélectionner le bon handler
-        handler = None
         tools_path = Path("ressources")  # Chemin vers les outils
         
         def log_callback(msg):
@@ -191,39 +248,13 @@ class WorkerThread(QThread):
             self.progress_update.emit(progress, msg)
         
         try:
-            if self.operation == "Conversion ISO/CUE/GDI > CHD":
-                self.handler = ChdV5Handler(str(tools_path), log_callback, progress_callback)
-            elif any(k in self.operation for k in ("Extraire CHD", "Extract CHD")):
-                self.handler = ExtractChdHandler(str(tools_path), log_callback, progress_callback)
-            elif "Merge BIN/CUE" in self.operation:
-                self.handler = MergeBinCueHandler(str(tools_path), log_callback, progress_callback)
-            elif "RVZ" in self.operation and "WBFS" not in self.operation:
-                self.handler = RvzHandler(str(tools_path), log_callback, progress_callback)
-                if "[GC/WII] RVZ > ISO" in self.operation:
-                    self.handler.direction = "rvz_to_iso"
-                else:
-                    self.handler.direction = "iso_to_rvz"
-            elif "wSquashFS" in self.operation:
-                self.handler = SquashFSHandler(str(tools_path), log_callback, progress_callback)
-            elif "[XBOX]" in self.operation:
-                self.handler = XboxPatchHandler(str(tools_path), log_callback, progress_callback)
-            elif "PS3" in self.operation:
-                self.handler = Ps3DecryptHandler(str(tools_path), log_callback, progress_callback)
-            elif any(k in self.operation for k in ("[WII] ISO > WBFS", "[WII] WBFS > ISO", "[WII] WBFS > RVZ", "[WII] WBFS <> ISO")):
-                self.handler = WbfsIsoHandler(str(tools_path), log_callback, progress_callback)
-                if "[WII] ISO > WBFS" in self.operation:
-                    self.handler.direction = "iso_to_wbfs"
-                elif "[WII] WBFS > RVZ" in self.operation:
-                    self.handler.direction = "wbfs_to_rvz"
-                elif "[WII] WBFS > ISO" in self.operation:
-                    self.handler.direction = "wbfs_to_iso"
-            else:
-                raise ValueError(f"Handler non disponible pour: {self.operation}")
+            self.handler = create_conversion_handler(self.operation, tools_path, log_callback, progress_callback)
 
             # Configurer le handler
             self.handler.source_folder = self.source_folder
             self.handler.dest_folder = self.dest_folder
             self.handler.delete_source_after_conversion = self.delete_source_after_conversion
+            self.handler.selected_sources = self.selected_sources
 
             # Valider les outils
             if not self.handler.validate_tools():
@@ -237,7 +268,7 @@ class WorkerThread(QThread):
                 if "Compression" in self.operation:
                     results = self.handler.compress()
                 elif any(k in self.operation for k in ("Extraction", "Extract", "Décompression")):
-                    results = self.handler.extract()
+                    results = self.handler.extract(extract_all="complet" in self.operation.lower())
                 else:
                     results = self.handler.convert()
             else:
@@ -480,6 +511,85 @@ class LogDialog(QDialog):
         self.open_log_folder_button.setText(main_window.tr('ui.log.open_folder', language=language))
 
 
+class SourceSelectionDialog(QDialog):
+    def __init__(self, candidates, source_folder, strings, parent=None):
+        super().__init__(parent)
+        self.setModal(True)
+        self.resize(560, 480)
+        self.setWindowTitle(strings["title"])
+
+        layout = QVBoxLayout(self)
+        self.source_list = QListWidget()
+        self._source_checkboxes = []
+        source_root = Path(source_folder)
+        for source_path in candidates:
+            try:
+                label = source_path.relative_to(source_root).as_posix()
+            except ValueError:
+                label = source_path.name
+            item = QListWidgetItem()
+            item.setToolTip(str(source_path))
+            item.setData(Qt.ItemDataRole.UserRole, str(source_path))
+            self.source_list.addItem(item)
+            checkbox = QCheckBox(label)
+            checkbox.setChecked(True)
+            checkbox.setStyleSheet(
+                "QCheckBox { background: transparent; spacing: 8px; }"
+                "QCheckBox::indicator { width: 18px; height: 18px; border: 2px solid #64748b; "
+                "border-radius: 3px; background-color: #ffffff; }"
+                "QCheckBox::indicator:checked { background-color: #22c55e; border-color: #15803d; }"
+            )
+            checkbox.stateChanged.connect(self._update_selection_count)
+            item.setSizeHint(QSize(0, checkbox.sizeHint().height() + 4))
+            self.source_list.setItemWidget(item, checkbox)
+            self._source_checkboxes.append(checkbox)
+        layout.addWidget(self.source_list)
+
+        select_row = QHBoxLayout()
+        select_all_button = QPushButton(strings["select_all"])
+        select_all_button.clicked.connect(lambda: self._set_all_checked(True))
+        select_row.addWidget(select_all_button)
+        select_none_button = QPushButton(strings["select_none"])
+        select_none_button.clicked.connect(lambda: self._set_all_checked(False))
+        select_row.addWidget(select_none_button)
+        select_row.addStretch()
+        layout.addLayout(select_row)
+
+        action_row = QHBoxLayout()
+        self.selection_count_label = QLabel()
+        action_row.addWidget(self.selection_count_label)
+        action_row.addStretch()
+        cancel_button = QPushButton(strings["cancel"])
+        cancel_button.clicked.connect(self.reject)
+        action_row.addWidget(cancel_button)
+        self.start_button = QPushButton(strings["start"])
+        self.start_button.clicked.connect(self.accept)
+        action_row.addWidget(self.start_button)
+        layout.addLayout(action_row)
+        self._count_format = strings["count"]
+        self._update_selection_count()
+
+    @property
+    def selected_sources(self):
+        return [
+            self.source_list.item(index).data(Qt.ItemDataRole.UserRole)
+            for index in range(self.source_list.count())
+            if self._source_checkboxes[index].isChecked()
+        ]
+
+    def _set_all_checked(self, checked):
+        for checkbox in self._source_checkboxes:
+            checkbox.setChecked(checked)
+
+    def _update_selection_count(self, *_args):
+        selected_count = len(self.selected_sources)
+        total_count = self.source_list.count()
+        self.selection_count_label.setText(
+            self._count_format.format(selected=selected_count, total=total_count)
+        )
+        self.start_button.setEnabled(selected_count > 0)
+
+
 class SettingsDialog(QDialog):
     """Dialog dédié aux réglages persistants de l'application."""
 
@@ -656,7 +766,8 @@ class B2PCMainWindow(QMainWindow):
             "Merge BIN/CUE": "ui.operation.merge_bin_cue",
             "Conversion ISO vers RVZ": "ui.operation.iso_to_rvz",
             "wSquashFS Compression": "ui.operation.wsquashfs_compress",
-            "wSquashFS Extraction": "ui.operation.wsquashfs_extract",
+            "wSquashFS Extraction (jeu)": "ui.operation.wsquashfs_extract_game",
+            "wSquashFS Extraction (complet)": "ui.operation.wsquashfs_extract_complete",
             "[XBOX] Patch ISO": "ui.operation.xbox_patch",
             "[PS3] Decrypt ISO & Convert": "ui.operation.ps3_decrypt",
             "[WII] ISO > WBFS": "ui.operation.wii_iso_to_wbfs",
@@ -993,7 +1104,8 @@ class B2PCMainWindow(QMainWindow):
             "ui.group.decompression",
             [
                 ("ui.button.extract_chd", self.extract_chd, "#22c55e"),
-                ("ui.button.wsquashfs_extract", self.extract_wsquashfs, "#eab308"),
+                ("ui.button.wsquashfs_extract_game", self.extract_wsquashfs, "#eab308"),
+                ("ui.button.wsquashfs_extract_complete", self.extract_wsquashfs_complete, "#eab308"),
                 ("ui.button.rvz_to_iso", self.convert_rvz_to_iso, "#22c55e"),
                 ("ui.button.wbfs_to_iso", self.convert_wbfs_to_iso, "#22c55e"),
             ]
@@ -1218,7 +1330,7 @@ class B2PCMainWindow(QMainWindow):
 
         # Version avec statut handlers
         app_version = getattr(QApplication.instance(), 'applicationVersion', lambda: "")( )
-        version_text = f"RetroGameSets 2025 // Version {app_version}"
+        version_text = f"RetroGameSets {datetime.now().strftime('%Y.%m')} // Version {app_version}"
         version_label = QLabel(version_text)
         version_label.setStyleSheet("color: #6b7280; font-size: 12px;")
         footer_layout.addWidget(version_label)
@@ -1317,7 +1429,7 @@ class B2PCMainWindow(QMainWindow):
             return True
 
         text = str(message or '')
-        allowed_tokens = ['✅', '🎉', '❌', '⚠️', '🛑']
+        allowed_tokens = ['✅', '🎉', '❌', '⚠️', '🛑', '🔎', '🎮', '📥', '⏳']
         for language in self.supported_languages:
             fragments = self.log_translations.get(language, {})
             file_token = fragments.get('log.104')
@@ -1353,14 +1465,18 @@ class B2PCMainWindow(QMainWindow):
 
         source_fragments = self.log_translations.get('fr', {})
         target_fragments = self.log_translations.get(self.language, {})
-        translated = message
-        for key, fr_fragment in source_fragments.items():
-            target_fragment = target_fragments.get(key)
-            if not target_fragment:
-                continue
-            if fr_fragment in translated:
-                translated = translated.replace(fr_fragment, target_fragment)
-        return translated
+        replacements = {
+            fragment: target_fragments[key]
+            for key, fragment in source_fragments.items()
+            if fragment and target_fragments.get(key)
+        }
+        if not replacements:
+            return message
+
+        pattern = re.compile(
+            "|".join(re.escape(fragment) for fragment in sorted(replacements, key=len, reverse=True))
+        )
+        return pattern.sub(lambda match: replacements[match.group(0)], message)
 
     def detect_log_fragment_key(self, message: str) -> Optional[str]:
         """Retourne la clé log.xxx détectée dans un message en se basant sur les fragments i18n."""
@@ -1496,6 +1612,36 @@ class B2PCMainWindow(QMainWindow):
         if self.source_input.text().strip() and not self.dest_input.text().strip():
             self.apply_default_dest_if_empty(self.source_input.text().strip())
 
+        source_folder = self.source_input.text().strip() or self.source_folder
+        if not source_folder or not Path(source_folder).is_dir():
+            QMessageBox.information(
+                self,
+                self.tr("ui.selection.title"),
+                self.tr("ui.selection.no_files"),
+            )
+            return
+
+        candidates = collect_conversion_sources(operation_name, source_folder)
+        if not candidates:
+            QMessageBox.information(
+                self,
+                self.tr("ui.selection.title"),
+                self.tr("ui.selection.no_files"),
+            )
+            return
+
+        selection_strings = {
+            key: self.tr(f"ui.selection.{key}")
+            for key in ("title", "select_all", "select_none", "count", "start", "cancel")
+        }
+        selection_dialog = SourceSelectionDialog(candidates, source_folder, selection_strings, self)
+        if selection_dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        self.source_folder = source_folder
+        self.dest_folder = self.dest_input.text().strip() or self.dest_folder
+        selected_sources = selection_dialog.selected_sources
+
         if not self.log_dialog:
             self.log_dialog = LogDialog(self)
         # Appliquer langue actuelle aux boutons (y compris états des boutons)
@@ -1519,6 +1665,7 @@ class B2PCMainWindow(QMainWindow):
             self.source_folder,
             self.dest_folder,
             delete_source_after_conversion=self.delete_source_after_conversion,
+            selected_sources=selected_sources,
         )
         self.log_dialog.set_worker_thread(self.current_worker)
 
@@ -1578,7 +1725,10 @@ class B2PCMainWindow(QMainWindow):
         self.show_conversion_dialog("wSquashFS Compression")
     
     def extract_wsquashfs(self):
-        self.show_conversion_dialog("wSquashFS Extraction")
+        self.show_conversion_dialog("wSquashFS Extraction (jeu)")
+
+    def extract_wsquashfs_complete(self):
+        self.show_conversion_dialog("wSquashFS Extraction (complet)")
     
     def patch_xbox_iso(self):
         self.show_conversion_dialog("[XBOX] Patch ISO")

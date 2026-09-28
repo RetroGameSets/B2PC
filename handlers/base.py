@@ -20,12 +20,13 @@ class ConversionHandler:
         self.should_stop = False  # Flag pour arrêter la conversion
         self.current_process = None  # Référence au processus en cours
         self.delete_source_after_conversion = False
+        self.selected_sources: Optional[set[str]] = None
     def validate_tools(self) -> bool:
         """Valide que tous les outils requis sont présents (compatibilité PyInstaller)"""
         from main import resource_path
         required_tools = [
             "7za.exe", "chdman.exe", "dolphin-tool.exe",
-            "xiso.exe", "gensquashfs.exe", "unsquashfs.exe"
+            "xiso.exe", "gensquashfs.exe"
         ]
         for tool in required_tools:
             tool_path = resource_path(f"ressources/{tool}")
@@ -249,8 +250,8 @@ class ConversionHandler:
         archives = self.detect_archives(source_path)
         for archive in archives:
             files_list.append((archive, "archive"))
-        
-        return files_list
+
+        return self.filter_selected_sources(files_list)
 
     def get_all_source_files(self, file_extension: str) -> List[tuple]:
         source_path = Path(self.source_folder)
@@ -262,7 +263,22 @@ class ConversionHandler:
         archives = self.detect_archives(source_path)
         for archive in archives:
             files_list.append((archive, "archive"))
-        return files_list
+        return self.filter_selected_sources(files_list)
+
+    def _normalize_source_path(self, source_path: Union[str, Path]) -> str:
+        return os.path.normcase(os.path.abspath(os.fspath(source_path)))
+
+    def filter_selected_sources(self, source_items: list) -> list:
+        if self.selected_sources is None:
+            return source_items
+
+        selected_paths = {self._normalize_source_path(path) for path in self.selected_sources}
+        filtered_items = []
+        for item in source_items:
+            source_path = item[0] if isinstance(item, tuple) else item
+            if self._normalize_source_path(source_path) in selected_paths:
+                filtered_items.append(item)
+        return filtered_items
 
     def _create_temp_workspace(self, prefix: str) -> Path:
         """Cree un dossier temporaire, de preference sous <destination>/TEMP."""

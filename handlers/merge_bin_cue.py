@@ -16,6 +16,7 @@ class MergeBinCueHandler(ConversionHandler):
         chd_handler.source_folder = self.source_folder
         chd_handler.dest_folder = str(chd_temp)
         chd_handler.should_stop = self.should_stop
+        chd_handler.selected_sources = self.selected_sources
         chd_result = chd_handler.convert()
         if chd_result.get("error_count", 0) > 0 or chd_handler.should_stop:
             self.log("❌ Erreur lors de la conversion en CHD, fusion annulée")
